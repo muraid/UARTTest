@@ -1,158 +1,179 @@
-const startButton = document.getElementById('startBtn');
-const mainText = document.getElementById('mainText');
-const subText = document.getElementById('subText');
-const hrText = document.getElementById('hrText');
-const rscText = document.getElementById('rscText');
-const cscText = document.getElementById('cscText');
-const testNameInput = document.getElementById('testNameInput');
+import { HeartRateSensor } from './ble/heartratesensor.js'
 
-let device, server, uartService, txChar, rxChar;
+const connectACCBtn = document.getElementById('connectACCBtn')
+const connectGYRBtn = document.getElementById('connectGYRBtn')
+const connectHRBtn = document.getElementById('connectHRBtn')
+const startButton = document.getElementById('startBtn')
+const mainText = document.getElementById('mainText')
+const subText = document.getElementById('subText')
+const hrText = document.getElementById('hrText')
+const accText = document.getElementById('accText')
+const gyrText = document.getElementById('gyrText')
+const testNameInput = document.getElementById('testNameInput')
 
-// UUIDs for BangleJS UART
-const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-const UART_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Bangle → Web
-const UART_RX      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Web → Bangle
 
-let testRunning = false;
-let testData = {};
-
-function initData() {
+// object containing the data of the test
+let testData = {}
+// initialization of an empty test data
+const initData = function () {
     testData = {
         startTs: '',
         endTs: '',
-        accel: [],
+        motion: [],
+        orientation: [],
         heartRate: [],
-        gps: [],
+        accelerometer: [],
+        gyroscope: [],
+        geolocation: []
     }
 }
 
-//--------------------------------------------------------------
-// CONNECT TO BANGLEJS
-//--------------------------------------------------------------
-async function connectBangle() {
-    device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: "Bangle" }],
-        optionalServices: [UART_SERVICE]
-    });
-
-    server = await device.gatt.connect();
-    uartService = await server.getPrimaryService(UART_SERVICE);
-
-    txChar = await uartService.getCharacteristic(UART_TX);
-    rxChar = await uartService.getCharacteristic(UART_RX);
-
-    // incoming Bangle data
-    await txChar.startNotifications();
-    txChar.addEventListener("characteristicvaluechanged", e => {
-        let str = new TextDecoder().decode(e.target.value);
-        parseIncomingData(str);
-    });
-
-    mainText.textContent = "Connected to Bangle!";
-}
-
-//--------------------------------------------------------------
-// PARSE INCOMING SENSOR STREAM (from BangleJS)
-//--------------------------------------------------------------
-function parseIncomingData(str) {
-    try {
-        const json = JSON.parse(str);
-
-        // Accelerometer
-        if (json.accel !== undefined) {
-            testData.accel.push({
-                ts: Date.now(),
-                value: json.accel
-            });
-        }
-
-        // HRM
-        if (json.hr !== undefined) {
-            hrText.textContent = "HR: " + json.hr + " bpm";
-            testData.heartRate.push({
-                ts: Date.now(),
-                hr: json.hr,
-                conf: json.hrConfidence
-            });
-        }
-
-        // GPS
-        if (json.gps !== undefined) {
-            testData.gps.push({
-                ts: Date.now(),
-                ...json.gps
-            });
-        }
-
-    } catch (err) {
-        console.log("RAW:", str);
+const HRsensor = new HeartRateSensor('Polar', (meas) => {
+    console.log(meas)
+    hrText.textContent = "HR: " + meas.heartRate + " bpm"
+    if (testData && testData.startTs) {
+        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
     }
-}
+    if (testRunning) {
+        testData.heartRate.push(meas)
+    }
+})
 
-//--------------------------------------------------------------
-// SEND COMMAND TO BANGLEJS
-//--------------------------------------------------------------
-function sendJSON(obj) {
-    if (!rxChar) return;
-    rxChar.writeValue(new TextEncoder().encode(JSON.stringify(obj) + "\n"));
-}
-
-//--------------------------------------------------------------
-// START / STOP TEST
-//--------------------------------------------------------------
-async function doTest() {
-    if (!testRunning) {
-
-        if (!device || !device.gatt.connected) {
-            await connectBangle();
+connectHRBtn.addEventListener('click', async () => {
+    if (!HRsensor.isConnected()) {
+        await HRsensor.connect()
+        if (HRsensor.isConnected()) {
+            HRsensor.startNotificationsHeartRateMeasurement()
+            connectHRBtn.textContent = "Disconnect Heart Rate sensor"
         }
-
-        // Init data
-        initData();
-        testData.startTs = new Date();
-        testRunning = true;
-
-        // Tell Bangle to start streaming
-        sendJSON({
-            cmd: "start",
-            sensors: ["accel", "hrm", "gps"],
-            interval: 500
-        });
-
-        mainText.textContent = "Test running...";
-        startButton.textContent = "Stop";
-
     } else {
+        // HRsensor.stopNotificationsHeartRateMeasurement()
+        HRsensor.disconnect()
+        if (!HRsensor.isConnected()) {
+            connectHRBtn.textContent = "Connect Heart Rate sensor"
+            hrText.textContent = " "
+        }
+    }
+})
 
-        // Stop streaming on Bangle
-        sendJSON({ cmd: "stop" });
 
-        testRunning = false;
-        testData.endTs = new Date();
+let testRunning = false
+mainText.textContent = 'Ready to start'
+// Reference for the Wake Lock.
+let wakeLock = null
 
-        mainText.textContent = "Test completed";
-        startButton.textContent = "Start";
+let doTest = async function () {
+    if (!testRunning) {
+        try {
+            await motion.requestPermission()
+            await orientation.requestPermission()
+            await geolocation.requestPermission()
+        } catch (err) {
+            console.error(err)
+            mainText.textContent = 'ERROR'
+            subText.textContent = 'Sensor needs permission, retry'
+            return
+        }
 
-        // Save file
-        const filename = "bangle_test_" + Date.now() + ".json";
-        const file = new File([JSON.stringify(testData)], filename, {
-            type: "application/json"
-        });
-
-        const msg = {
-            title: "Test data",
-            files: [file]
-        };
-
-        if (navigator.canShare(msg)) {
-            await navigator.share(msg);
+        if ("wakeLock" in navigator) {
+            // request a wake lock
+            try {
+                wakeLock = await navigator.wakeLock.request("screen")
+            } catch (err) {
+                console.errror(err)
+            }
         } else {
-            alert("Sharing not supported on this device");
+            subText.textContent = "Wake lock is not supported by this browser"
+        }
+
+        // all permission working, start the test
+        initData()
+        testRunning = true
+        testData.startTs = new Date()
+
+        // start acquiring IMU signals
+        motion.startNotifications((data) => {
+            testData.motion.push(data)
+        })
+        orientation.startNotifications((data) => {
+            testData.orientation.push(data)
+        })
+        geolocation.startNotifications(1000, (data) => {
+            testData.geolocation.push(data)
+        })
+
+        mainText.textContent = 'Test started!'
+        startButton.textContent = 'Stop'
+    } else {
+        // release wake lock
+        if (wakeLock) {
+            wakeLock.release().then(() => {
+                wakeLock = null
+            })
+        }
+
+        testRunning = false
+        // stop signals acquisition
+        motion.stopNotifications()
+        orientation.stopNotifications()
+        geolocation.stopNotifications()
+
+        testData.endTs = new Date()
+        mainText.textContent = 'Test completed, ready to start again'
+        startButton.textContent = 'Start'
+
+        console.log(testData)
+
+        const testName = testNameInput.value
+        let filename = 'test' + testName + '_' + new Date().getTime() + '.txt'
+        const file = new File([JSON.stringify(testData)], filename, {
+            type: 'text/plain',
+        })
+
+        let message = {
+            title: 'Test ' + testName + ' results',
+            text: 'This file contains a test done on ' + new Date(),
+            files: [file],
+        }
+
+        if (navigator.canShare(message)) {
+            await navigator.share(message);
+        } else {
+            mainText.textContent = 'Cannot share file'
         }
     }
 }
 
-//--------------------------------------------------------------
-// UI BUTTON
-//--------------------------------------------------------------
-startButton.addEventListener('click', doTest);
+
+
+// detect file saving capability
+const testfile = new File(['test'], "testresults.json", {
+    type: "text/json",
+})
+if ((typeof navigator.share !== 'function') || !navigator.canShare({
+    title: "Test results",
+    text: "This file contains a test done on " + new Date(),
+    files: [testfile],
+})) {
+    subText.textContent = 'File saving not supported'
+    startButton.style.visibility = 'hidden'
+    startButton.disabled = true
+}
+
+
+// detect motion availability
+if (!motion.isAvailable()) {
+    subText.textContent = 'Motion sensor not available'
+    startButton.style.visibility = 'hidden'
+    startButton.disabled = true
+}
+
+// detect orientation availability
+if (!orientation.isAvailable()) {
+    subText.textContent = 'Orientation sensor not available'
+    startButton.style.visibility = 'hidden'
+    startButton.disabled = true
+}
+
+
+startButton.addEventListener('click', doTest)
