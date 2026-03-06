@@ -1,249 +1,158 @@
-import motion from './phone/motion.js'
-import orientation from './phone/orientation.js'
-import geolocation from './phone/geolocation.js'
+const startButton = document.getElementById('startBtn');
+const mainText = document.getElementById('mainText');
+const subText = document.getElementById('subText');
+const hrText = document.getElementById('hrText');
+const rscText = document.getElementById('rscText');
+const cscText = document.getElementById('cscText');
+const testNameInput = document.getElementById('testNameInput');
 
-import { HeartRateSensor } from './ble/heartratesensor.js'
-import { RunningSpeedCadenceSensor } from './ble/rscsensor.js'
-import { CyclingSpeedCadenceSensor } from './ble/cscsensor.js'
+let device, server, uartService, txChar, rxChar;
 
-const connectRSCBtn = document.getElementById('connectRSCBtn')
-const connectCSCBtn = document.getElementById('connectCSCBtn')
-const connectHRBtn = document.getElementById('connectHRBtn')
-const startButton = document.getElementById('startBtn')
-const mainText = document.getElementById('mainText')
-const subText = document.getElementById('subText')
-const hrText = document.getElementById('hrText')
-const rscText = document.getElementById('rscText')
-const cscText = document.getElementById('cscText')
-const testNameInput = document.getElementById('testNameInput')
+// UUIDs for BangleJS UART
+const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const UART_TX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // Bangle → Web
+const UART_RX      = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // Web → Bangle
 
+let testRunning = false;
+let testData = {};
 
-// object containing the data of the test
-let testData = {}
-// initialization of an empty test data
-const initData = function () {
+function initData() {
     testData = {
         startTs: '',
         endTs: '',
-        motion: [],
-        orientation: [],
+        accel: [],
         heartRate: [],
-        runningCadence: [],
-        cyclingCadence: [],
-        geolocation: []
+        gps: [],
     }
 }
 
-const HRsensor = new HeartRateSensor('Polar', (meas) => {
-    console.log(meas)
-    hrText.textContent = "HR: " + meas.heartRate + " bpm"
-    if (testData && testData.startTs) {
-        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
-    }
-    if (testRunning) {
-        testData.heartRate.push(meas)
-    }
-})
+//--------------------------------------------------------------
+// CONNECT TO BANGLEJS
+//--------------------------------------------------------------
+async function connectBangle() {
+    device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "Bangle" }],
+        optionalServices: [UART_SERVICE]
+    });
 
-const RSCsensor = new RunningSpeedCadenceSensor('Polar', (meas) => {
-    console.log(meas)
-    rscText.textContent = "Running: " + meas.instantaneousCadence + " fpm"
-    if (testData && testData.startTs) {
-        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
-    }
-    if (testRunning) {
-        testData.runningCadence.push(meas)
-    }
-})
+    server = await device.gatt.connect();
+    uartService = await server.getPrimaryService(UART_SERVICE);
 
-let firstCSCrevolutions = -1
+    txChar = await uartService.getCharacteristic(UART_TX);
+    rxChar = await uartService.getCharacteristic(UART_RX);
 
-const CSCsensor = new CyclingSpeedCadenceSensor('BK3', (meas) => {
-    console.log(meas)
-    if (firstCSCrevolutions == -1) firstCSCrevolutions = meas.cumulativeCrankRevolutions
+    // incoming Bangle data
+    await txChar.startNotifications();
+    txChar.addEventListener("characteristicvaluechanged", e => {
+        let str = new TextDecoder().decode(e.target.value);
+        parseIncomingData(str);
+    });
 
-    let revs = meas.cumulativeCrankRevolutions - firstCSCrevolutions
-    cscText.textContent = "Cycling: " + revs + " cranks"
+    mainText.textContent = "Connected to Bangle!";
+}
 
-    if (testData && testData.startTs) {
-        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
-    }
-    if (testRunning) {
-        testData.cyclingCadence.push(meas)
-    }
-})
+//--------------------------------------------------------------
+// PARSE INCOMING SENSOR STREAM (from BangleJS)
+//--------------------------------------------------------------
+function parseIncomingData(str) {
+    try {
+        const json = JSON.parse(str);
 
-connectHRBtn.addEventListener('click', async () => {
-    if (!HRsensor.isConnected()) {
-        await HRsensor.connect()
-        if (HRsensor.isConnected()) {
-            HRsensor.startNotificationsHeartRateMeasurement()
-            connectHRBtn.textContent = "Disconnect Heart Rate sensor"
+        // Accelerometer
+        if (json.accel !== undefined) {
+            testData.accel.push({
+                ts: Date.now(),
+                value: json.accel
+            });
         }
-    } else {
-        // HRsensor.stopNotificationsHeartRateMeasurement()
-        HRsensor.disconnect()
-        if (!HRsensor.isConnected()) {
-            connectHRBtn.textContent = "Connect Heart Rate sensor"
-            hrText.textContent = " "
+
+        // HRM
+        if (json.hr !== undefined) {
+            hrText.textContent = "HR: " + json.hr + " bpm";
+            testData.heartRate.push({
+                ts: Date.now(),
+                hr: json.hr,
+                conf: json.hrConfidence
+            });
         }
+
+        // GPS
+        if (json.gps !== undefined) {
+            testData.gps.push({
+                ts: Date.now(),
+                ...json.gps
+            });
+        }
+
+    } catch (err) {
+        console.log("RAW:", str);
     }
-})
+}
 
-connectRSCBtn.addEventListener('click', async () => {
-    if (!RSCsensor.isConnected()) {
-        await RSCsensor.connect()
-        if (RSCsensor.isConnected()) {
-            RSCsensor.startNotificationsRSCMeasurement()
-            connectRSCBtn.textContent = "Disconnect Running sensor"
-        }
-    } else {
-        // RSCsensor.stopNotificationsRSCMeasurement()
-        RSCsensor.disconnect()
-        if (!RSCsensor.isConnected()) {
-            connectRSCBtn.textContent = "Connect Running sensor"
-            rscText.textContent = " "
-        }
-    }
-})
+//--------------------------------------------------------------
+// SEND COMMAND TO BANGLEJS
+//--------------------------------------------------------------
+function sendJSON(obj) {
+    if (!rxChar) return;
+    rxChar.writeValue(new TextEncoder().encode(JSON.stringify(obj) + "\n"));
+}
 
-connectCSCBtn.addEventListener('click', async () => {
-    if (!CSCsensor.isConnected()) {
-        await CSCsensor.connect()
-        if (CSCsensor.isConnected()) {
-            CSCsensor.startNotificationsCSCMeasurement()
-            connectCSCBtn.textContent = "Disconnect Cycling sensor"
-        }
-    } else {
-        // RSCsensor.stopNotificationsRSCMeasurement()
-        CSCsensor.disconnect()
-        if (!CSCsensor.isConnected()) {
-            connectCSCBtn.textContent = "Connect Cycling sensor"
-            rscText.textContent = " "
-        }
-    }
-})
-
-let testRunning = false
-mainText.textContent = 'Ready to start'
-// Reference for the Wake Lock.
-let wakeLock = null
-
-let doTest = async function () {
+//--------------------------------------------------------------
+// START / STOP TEST
+//--------------------------------------------------------------
+async function doTest() {
     if (!testRunning) {
-        try {
-            await motion.requestPermission()
-            await orientation.requestPermission()
-            await geolocation.requestPermission()
-        } catch (err) {
-            console.error(err)
-            mainText.textContent = 'ERROR'
-            subText.textContent = 'Sensor needs permission, retry'
-            return
+
+        if (!device || !device.gatt.connected) {
+            await connectBangle();
         }
 
-        if ("wakeLock" in navigator) {
-            // request a wake lock
-            try {
-                wakeLock = await navigator.wakeLock.request("screen")
-            } catch (err) {
-                console.errror(err)
-            }
-        } else {
-            subText.textContent = "Wake lock is not supported by this browser"
-        }
+        // Init data
+        initData();
+        testData.startTs = new Date();
+        testRunning = true;
 
-        // all permission working, start the test
-        initData()
-        testRunning = true
-        testData.startTs = new Date()
+        // Tell Bangle to start streaming
+        sendJSON({
+            cmd: "start",
+            sensors: ["accel", "hrm", "gps"],
+            interval: 500
+        });
 
-        // reset csc revolutions counter
-        firstCSCrevolutions = -1
+        mainText.textContent = "Test running...";
+        startButton.textContent = "Stop";
 
-        // start acquiring IMU signals
-        motion.startNotifications((data) => {
-            testData.motion.push(data)
-        })
-        orientation.startNotifications((data) => {
-            testData.orientation.push(data)
-        })
-        geolocation.startNotifications(1000, (data) => {
-            testData.geolocation.push(data)
-        })
-
-        mainText.textContent = 'Test started!'
-        startButton.textContent = 'Stop'
     } else {
-        // release wake lock
-        if (wakeLock) {
-            wakeLock.release().then(() => {
-                wakeLock = null
-            })
-        }
 
-        testRunning = false
-        // stop signals acquisition
-        motion.stopNotifications()
-        orientation.stopNotifications()
-        geolocation.stopNotifications()
+        // Stop streaming on Bangle
+        sendJSON({ cmd: "stop" });
 
-        testData.endTs = new Date()
-        mainText.textContent = 'Test completed, ready to start again'
-        startButton.textContent = 'Start'
+        testRunning = false;
+        testData.endTs = new Date();
 
-        console.log(testData)
+        mainText.textContent = "Test completed";
+        startButton.textContent = "Start";
 
-        const testName = testNameInput.value
-        let filename = 'test' + testName + '_' + new Date().getTime() + '.txt'
+        // Save file
+        const filename = "bangle_test_" + Date.now() + ".json";
         const file = new File([JSON.stringify(testData)], filename, {
-            type: 'text/plain',
-        })
+            type: "application/json"
+        });
 
-        let message = {
-            title: 'Test ' + testName + ' results',
-            text: 'This file contains a test done on ' + new Date(),
-            files: [file],
-        }
+        const msg = {
+            title: "Test data",
+            files: [file]
+        };
 
-        if (navigator.canShare(message)) {
-            await navigator.share(message);
+        if (navigator.canShare(msg)) {
+            await navigator.share(msg);
         } else {
-            mainText.textContent = 'Cannot share file'
+            alert("Sharing not supported on this device");
         }
     }
 }
 
-
-
-// detect file saving capability
-const testfile = new File(['test'], "testresults.json", {
-    type: "text/json",
-})
-if ((typeof navigator.share !== 'function') || !navigator.canShare({
-    title: "Test results",
-    text: "This file contains a test done on " + new Date(),
-    files: [testfile],
-})) {
-    subText.textContent = 'File saving not supported'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
-}
-
-
-// detect motion availability
-if (!motion.isAvailable()) {
-    subText.textContent = 'Motion sensor not available'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
-}
-
-// detect orientation availability
-if (!orientation.isAvailable()) {
-    subText.textContent = 'Orientation sensor not available'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
-}
-
-
-startButton.addEventListener('click', doTest)
+//--------------------------------------------------------------
+// UI BUTTON
+//--------------------------------------------------------------
+startButton.addEventListener('click', doTest);
