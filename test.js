@@ -4,11 +4,16 @@ import orientation from './phone/orientation.js'
 import { HeartRateSensor } from './ble/heartratesensor.js'
 
 const connectHRBtn = document.getElementById('connectHRBtn')
+const connectAccelBtn = document.getElementById('connectAccelBtn');
+const connectGyroBtn = document.getElementById('connectGyroBtn');
 const startButton = document.getElementById('startBtn')
 const mainText = document.getElementById('mainText')
 const subText = document.getElementById('subText')
 const hrText = document.getElementById('hrText')
+const accText = document.getElementById('accText');
+const gyroText = document.getElementById('gyroText');
 const testNameInput = document.getElementById('testNameInput')
+
 
 
 // object containing the data of the test
@@ -20,7 +25,8 @@ const initData = function () {
         endTs: '',
         motion: [],
         orientation: [],
-        heartRate: []
+        heartRate: [],
+        gyro: []
     }
 }
 
@@ -49,6 +55,34 @@ connectHRBtn.addEventListener('click', async () => {
             connectHRBtn.textContent = "Connect Heart Rate sensor"
             hrText.textContent = " "
         }
+    }
+})
+
+connectAccelBtn.addEventListener('click', async () => {
+    if (!motion.isAvailable()) {
+        accText.textContent = "Accelerometer not available";
+        return;
+    }
+
+    try {
+        await motion.requestPermission();
+        accText.textContent = "Accelerometer connected";
+    } catch (err) {
+        accText.textContent = "Permission denied";
+    }
+})
+
+connectGyroBtn.addEventListener('click', async () => {
+    if (!orientation.isAvailable()) {
+        gyroText.textContent = "Gyro not available";
+        return;
+    }
+
+    try {
+        await orientation.requestPermission();
+        gyroText.textContent = "Gyro connected";
+    } catch (err) {
+        gyroText.textContent = "Permission denied";
     }
 })
 
@@ -94,7 +128,7 @@ let doTest = async function () {
         })
         orientation.startNotifications((data) => {
             console.log("GYRO:", data)
-            testData.orientation.push(data)
+            testData.gyro.push(data)
         })
 
         mainText.textContent = 'Test started!'
