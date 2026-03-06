@@ -1,6 +1,3 @@
-import motion from './phone/motion.js'
-import orientation from './phone/orientation.js'
-
 import { HeartRateSensor } from './ble/heartratesensor.js'
 
 const connectHRBtn = document.getElementById('connectHRBtn')
@@ -14,7 +11,9 @@ const accText = document.getElementById('accText');
 const gyroText = document.getElementById('gyroText');
 const testNameInput = document.getElementById('testNameInput')
 
-
+let connectedAccel = false
+let connectedGyro = false
+let accelDevice, gyroDevice
 
 // object containing the data of the test
 let testData = {}
@@ -59,33 +58,47 @@ connectHRBtn.addEventListener('click', async () => {
 })
 
 connectAccelBtn.addEventListener('click', async () => {
-    if (!motion.isAvailable()) {
-        accText.textContent = "Accelerometer not available";
-        return;
-    }
+    const device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'Bangle' }],
+        optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
+    })
+    const server = await device.gatt.connect()
+    const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8')
+    const characteristic = await service.getCharacteristic('e95dca4b-251d-470a-a062-fa1922dfa9a8')
 
-    try {
-        await motion.requestPermission();
-        accText.textContent = "Accelerometer connected";
-    } catch (err) {
-        accText.textContent = "Permission denied";
-    }
+    characteristic.addEventListener('characteristicvaluechanged', evt => {
+        const data = evt.target.value
+        const x = data.getInt16(0,true)
+        const y = data.getInt16(2,true)
+        const z = data.getInt16(4,true)
+        accText.textContent = `ACC: X=${x}, Y=${y}, Z=${z}`
+        if(testRunning) testData.motion.push({x,y,z,ts:Date.now()})
+    })
+
+    await characteristic.startNotifications()
 })
 
+// --- Gyroscope ---
 connectGyroBtn.addEventListener('click', async () => {
-    if (!orientation.isAvailable()) {
-        gyroText.textContent = "Gyro not available";
-        return;
-    }
+    const device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'Bangle' }],
+        optionalServices: ['e95d6b53-251d-470a-a062-fa1922dfa9a8']
+    })
+    const server = await device.gatt.connect()
+    const service = await server.getPrimaryService('e95d6b53-251d-470a-a062-fa1922dfa9a8')
+    const characteristic = await service.getCharacteristic('e95dfb24-251d-470a-a062-fa1922dfa9a8')
 
-    try {
-        await orientation.requestPermission();
-        gyroText.textContent = "Gyro connected";
-    } catch (err) {
-        gyroText.textContent = "Permission denied";
-    }
+    characteristic.addEventListener('characteristicvaluechanged', evt => {
+        const data = evt.target.value
+        const x = data.getInt16(0,true)
+        const y = data.getInt16(2,true)
+        const z = data.getInt16(4,true)
+        gyroText.textContent = `GYRO: X=${x}, Y=${y}, Z=${z}`
+        if(testRunning) testData.gyro.push({x,y,z,ts:Date.now()})
+    })
+
+    await characteristic.startNotifications()
 })
-
 
 let testRunning = false
 mainText.textContent = 'Ready to start'
@@ -95,8 +108,7 @@ let wakeLock = null
 let doTest = async function () {
     if (!testRunning) {
         try {
-            await motion.requestPermission()
-            await orientation.requestPermission()
+            
         } catch (err) {
             console.error(err)
             mainText.textContent = 'ERROR'
@@ -121,16 +133,6 @@ let doTest = async function () {
         testData.startTs = new Date()
 
 
-        // start acquiring IMU signals
-        motion.startNotifications((data) => {
-            console.log("ACC:", data)
-            testData.motion.push(data)
-        })
-        orientation.startNotifications((data) => {
-            console.log("GYRO:", data)
-            testData.gyro.push(data)
-        })
-
         mainText.textContent = 'Test started!'
         startButton.textContent = 'Stop'
     } else {
@@ -142,9 +144,6 @@ let doTest = async function () {
         }
 
         testRunning = false
-        // stop signals acquisition
-        motion.stopNotifications()
-        orientation.stopNotifications()
 
         testData.endTs = new Date()
         mainText.textContent = 'Test completed, ready to start again'
@@ -184,21 +183,6 @@ if ((typeof navigator.share !== 'function') || !navigator.canShare({
     files: [testfile],
 })) {
     subText.textContent = 'File saving not supported'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
-}
-
-
-// detect motion availability
-if (!motion.isAvailable()) {
-    subText.textContent = 'Motion sensor not available'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
-}
-
-// detect orientation availability
-if (!orientation.isAvailable()) {
-    subText.textContent = 'Orientation sensor not available'
     startButton.style.visibility = 'hidden'
     startButton.disabled = true
 }
