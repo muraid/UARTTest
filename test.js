@@ -1,14 +1,20 @@
-import { HeartRateSensor } from './ble/heartratesensor.js'
+import motion from './phone/motion.js'
+import orientation from './phone/orientation.js'
+import geolocation from './phone/geolocation.js'
 
-const connectACCBtn = document.getElementById('connectACCBtn')
-const connectGYRBtn = document.getElementById('connectGYRBtn')
+import { HeartRateSensor } from './ble/heartratesensor.js'
+import { RunningSpeedCadenceSensor } from './ble/rscsensor.js'
+import { CyclingSpeedCadenceSensor } from './ble/cscsensor.js'
+
+const connectRSCBtn = document.getElementById('connectRSCBtn')
+const connectCSCBtn = document.getElementById('connectCSCBtn')
 const connectHRBtn = document.getElementById('connectHRBtn')
 const startButton = document.getElementById('startBtn')
 const mainText = document.getElementById('mainText')
 const subText = document.getElementById('subText')
 const hrText = document.getElementById('hrText')
-const accText = document.getElementById('accText')
-const gyrText = document.getElementById('gyrText')
+const rscText = document.getElementById('rscText')
+const cscText = document.getElementById('cscText')
 const testNameInput = document.getElementById('testNameInput')
 
 
@@ -22,8 +28,8 @@ const initData = function () {
         motion: [],
         orientation: [],
         heartRate: [],
-        accelerometer: [],
-        gyroscope: [],
+        runningCadence: [],
+        cyclingCadence: [],
         geolocation: []
     }
 }
@@ -36,6 +42,34 @@ const HRsensor = new HeartRateSensor('Polar', (meas) => {
     }
     if (testRunning) {
         testData.heartRate.push(meas)
+    }
+})
+
+const RSCsensor = new RunningSpeedCadenceSensor('Polar', (meas) => {
+    console.log(meas)
+    rscText.textContent = "Running: " + meas.instantaneousCadence + " fpm"
+    if (testData && testData.startTs) {
+        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
+    }
+    if (testRunning) {
+        testData.runningCadence.push(meas)
+    }
+})
+
+let firstCSCrevolutions = -1
+
+const CSCsensor = new CyclingSpeedCadenceSensor('BK3', (meas) => {
+    console.log(meas)
+    if (firstCSCrevolutions == -1) firstCSCrevolutions = meas.cumulativeCrankRevolutions
+
+    let revs = meas.cumulativeCrankRevolutions - firstCSCrevolutions
+    cscText.textContent = "Cycling: " + revs + " cranks"
+
+    if (testData && testData.startTs) {
+        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
+    }
+    if (testRunning) {
+        testData.cyclingCadence.push(meas)
     }
 })
 
@@ -56,6 +90,39 @@ connectHRBtn.addEventListener('click', async () => {
     }
 })
 
+connectRSCBtn.addEventListener('click', async () => {
+    if (!RSCsensor.isConnected()) {
+        await RSCsensor.connect()
+        if (RSCsensor.isConnected()) {
+            RSCsensor.startNotificationsRSCMeasurement()
+            connectRSCBtn.textContent = "Disconnect Running sensor"
+        }
+    } else {
+        // RSCsensor.stopNotificationsRSCMeasurement()
+        RSCsensor.disconnect()
+        if (!RSCsensor.isConnected()) {
+            connectRSCBtn.textContent = "Connect Running sensor"
+            rscText.textContent = " "
+        }
+    }
+})
+
+connectCSCBtn.addEventListener('click', async () => {
+    if (!CSCsensor.isConnected()) {
+        await CSCsensor.connect()
+        if (CSCsensor.isConnected()) {
+            CSCsensor.startNotificationsCSCMeasurement()
+            connectCSCBtn.textContent = "Disconnect Cycling sensor"
+        }
+    } else {
+        // RSCsensor.stopNotificationsRSCMeasurement()
+        CSCsensor.disconnect()
+        if (!CSCsensor.isConnected()) {
+            connectCSCBtn.textContent = "Connect Cycling sensor"
+            rscText.textContent = " "
+        }
+    }
+})
 
 let testRunning = false
 mainText.textContent = 'Ready to start'
@@ -90,6 +157,9 @@ let doTest = async function () {
         initData()
         testRunning = true
         testData.startTs = new Date()
+
+        // reset csc revolutions counter
+        firstCSCrevolutions = -1
 
         // start acquiring IMU signals
         motion.startNotifications((data) => {
