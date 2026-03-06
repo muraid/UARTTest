@@ -1,271 +1,179 @@
+<!DOCTYPE html>
 <html>
 
 <head>
-    <title>Bangle.js Data streaming</title>
+    <title>Bangle.js Hybrid Streaming</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="https://cdn.rawgit.com/kimeiga/bahunya/css/bahunya-0.1.1.css" />
 </head>
 
 <body>
-    <script src="https://www.puck-js.com/puck.js"></script>
-    <script src="deps/FileSaver.js"></script>
-    <h2 style="text-align: center;">Bangle.js data streaming app</h2>
+    <script src="https://www.puck-js.com/puck.js="text-align: center;">Bangle.js Hybrid Data Streaming App</h2>
 
     <main>
         <article>
             <p id="pMain">Ready to connect</p>
             <button id="btnConnect">Connect</button>
+
+            <h3>Realtime values:</h3>
             <p>X: <span id="pX"></span></p>
             <p>Y: <span id="pY"></span></p>
             <p>Z: <span id="pZ"></span></p>
-
+            <p>HR: <span id="pHR"></span></p>
         </article>
-
     </main>
 
-
     <script>
-        // Code to upload to Bangle.js
+        /****************************************************
+         * Hybrid WebApp: JSON streaming + old UI structure
+         ****************************************************/
 
+        let btnConnect = document.getElementById("btnConnect");
+        let pMain = document.getElementById("pMain");
+        let pX = document.getElementById("pX");
+        let pY = document.getElementById("pY");
+        let pZ = document.getElementById("pZ");
+        let pHR = document.getElementById("pHR");
 
-        var BANGLE_CODE = `
-var start = Date.now()
-Bluetooth.println("I," + start);
+        let connection;
+        let buf = "";
 
-Bangle.on('accel',function(a) {
-  var d = [
-    "A",
-    Math.round(Date.now() - start),
-    Math.round(a.x * 8192),
-    Math.round(a.y * 8192),
-    Math.round(a.z * 8192)
-    ];
-  Bluetooth.println(d.join(","));
-})
+        let result = {};
 
-// Bangle.setCompassPower(1);
-// Bangle.on('mag', function(mag) {
-//     var d = [
-//       "C",
-//       Math.round(Date.now() - start),
-//       mag.x,
-//       mag.y,
-//       mag.z
-//       ];
-//     Bluetooth.println(d.join(","));
-// });
-
-Bangle.on('step', function(up) {
-    var d = [
-      "S",
-      Math.round(Date.now() - start),
-      up
-      ];
-    Bluetooth.println(d.join(","));
-});
-
-Bangle.setHRMPower(1);
-// HR values
-Bangle.on('HRM',function(hrm) {
-    var d = [
-      "H",
-      Math.round(Date.now() - start),
-      hrm.bpm,
-      hrm.confidence
-      ];
-    Bluetooth.println(d.join(","));
-});
-// PPG
-Bangle.on('HRM-raw',function(hrm) {
-    var d = [
-      "G",
-      Math.round(Date.now() - start),
-      hrm.raw
-      ];
-    Bluetooth.println(d.join(","));
-});
-
-// environment light (when LED of PPG is off)
-Bangle.on('HRM-env', function(env) { 
-    var d = [
-      "E",
-      Math.round(Date.now() - start),
-      env
-      ];
-    Bluetooth.println(d.join(","));
- });
-
-// let lastPressure = -1
-// Bangle.setBarometerPower(true);
-// Bangle.on('pressure', function(pr) {
-//     if (lastPressure = -1) {
-//         lastPressure = pr.pressure
-//     } else {
-
-//     }
-//     var d = [
-//       "P",
-//       Math.round(Date.now() - start),
-//       Math.round(pr.temperature*10),
-//       Math.round((pr.pressure - lastPressure) *10000)
-//       ];
-//     Bluetooth.println(d.join(","));
-// });
-`;
-        let pMain = document.getElementById("pMain")
-        let btnConnect = document.getElementById("btnConnect")
-        let pX = document.getElementById("pX")
-        let pY = document.getElementById("pY")
-        let pZ = document.getElementById("pZ")
-
-        let result = {}
-
-
-        // detect file saving capability
+        // Detect browser saving capability
         try {
-            new Blob
+            new Blob();
         } catch (e) {
-            console.error(e)
-            pMain.textContent = 'File saving not supported'
-            btnConnect.disabled = true
+            pMain.textContent = 'File saving not supported';
+            btnConnect.disabled = true;
         }
 
-        // When we click the connect button...
-        let connection
+        /****************************************************
+         * Helper: Send JSON to Bangle
+         ****************************************************/
+        function sendJSON(obj) {
+            if (!connection) return;
+            const s = JSON.stringify(obj);
+            connection.write(s + "\n");
+        }
+
+        /****************************************************
+         * Handle JSON data from Bangle
+         ****************************************************/
+        function onJSON(data) {
+            // ACCEL
+            if (data.accel) {
+                pX.textContent = data.accel.x;
+                pY.textContent = data.accel.y;
+                pZ.textContent = data.accel.z;
+
+                result.accel.push({
+                    ts: Date.now(),
+                    ...data.accel
+                });
+            }
+
+            // HEART RATE
+            if (data.hr !== undefined) {
+                pHR.textContent = data.hr + " bpm";
+                result.heartRate.push({
+                    ts: Date.now(),
+                    hr: data.hr,
+                    conf: data.hrConfidence
+                });
+            }
+
+            // GPS (optional – depends on watch model)
+            if (data.gps) {
+                result.gps.push({
+                    ts: Date.now(),
+                    ...data.gps
+                });
+            }
+        }
+
+        /****************************************************
+         * Handle incoming text → split → parse JSON
+         ****************************************************/
+        function onLine(line) {
+            try {
+                const json = JSON.parse(line);
+                onJSON(json);
+            } catch (e) {
+                console.log("Non-JSON line:", line);
+            }
+        }
+
+        /****************************************************
+         * MAIN CONNECT/DISCONNECT FLOW
+         ****************************************************/
         btnConnect.addEventListener("click", function () {
-            // disconnect if connected already
+
+            // If connected → disconnect and save file
             if (connection) {
-                connection.close()
-                connection = undefined
-                pMain.textContent = 'Ready to connect'
+                connection.close();
+                connection = undefined;
 
-                result.endTs = new Date()
-                console.log(result)
-                var blob = new Blob([JSON.stringify(result)], { type: "text/json;charset=utf-8" })
+                pMain.textContent = "Ready to connect";
+                btnConnect.textContent = "Connect";
 
-                let filename = 'testResults_' + Date.now() + '.json'
-                saveAs(blob, filename)
-                return
-            } else {
-                // Connect
-                Puck.connect(function (c) {
-                    if (!c) {
-                        return
-                    }
-                    connection = c
-                    pMain.textContent = 'Connected!'
-                    btnConnect.textContent = 'Disconnect'
-                    // initialise result
-                    result.startTs = new Date()
-                    result.accel = []
-                    result.compass = []
-                    result.pressure = []
-                    result.steps = []
-                    result.hr = []
-                    result.ppg = []
-                    result.environment = []
-                    // Handle the data we get back, and call 'onLine'
-                    // whenever we get a new line
-                    var buf = "";
-                    connection.on("data", function (d) {
-                        buf += d;
-                        var l = buf.split("\n")
-                        buf = l.pop()
-                        l.forEach(onLine)
-                    })
+                result.endTs = new Date();
 
-                    // First, reset the Bangle
-                    connection.write("reset();\n", function () {
-                        // Wait for it to reset itself
-                        setTimeout(function () {
-                            // Now upload our code to it
-                            connection.write("\x03\x10if(1){" + BANGLE_CODE + "}\n",
-                                () => {
-                                    console.log("Ready...")
-                                })
-                        }, 1500)
-                    })
-                })
-            }
-        })
+                // Save file
+                let filename = "bangle_test_" + Date.now() + ".json";
+                let blob = new Blob([JSON.stringify(result)], { type: "application/json" });
+                saveAs(blob, filename);
 
-        // When we get a line of data, check it and if it's
-        // from the accelerometer, update it
-        function onLine (line) {
-            // console.log("RECEIVED:" + line);
-            var d = line.split(",");
-            if (d.length == 2 && d[0] == "I") {
-                result.startTs = d[1]
+                return;
             }
-            if (d.length == 5 && d[0] == "A") {
-                // we have an accelerometer reading
-                var accel = {
-                    ms: parseInt(d[1]),
-                    x: parseInt(d[2]),
-                    y: parseInt(d[3]),
-                    z: parseInt(d[4])
-                }
-                pX.textContent = accel.x
-                pY.textContent = accel.y
-                pZ.textContent = accel.z
 
-                result.accel.push(accel)
-            }
-            if (d.length == 5 && d[0] == "C") {
-                // we have compass reading
-                var mag = {
-                    ms: parseInt(d[1]),
-                    x: parseInt(d[2]),
-                    y: parseInt(d[3]),
-                    z: parseInt(d[4])
-                }
-                result.compass.push(mag)
-            }
-            if (d.length == 3 && d[0] == "S") {
-                // we have steps reading
-                var steps = {
-                    ms: parseInt(d[1]),
-                    steps: parseInt(d[2]),
-                }
-                result.steps.push(steps)
-            }
-            if (d.length == 4 && d[0] == "H") {
-                // we have an HR monitor reading
-                var hr_data = {
-                    ms: parseInt(d[1]),
-                    hr: parseInt(d[2]),
-                    conf: parseInt(d[3])
-                }
-                result.hr.push(hr_data)
-            }
-            if (d.length == 3 && d[0] == "G") {
-                // ppg
-                var ppg = {
-                    ms: parseInt(d[1]),
-                    ppg: parseInt(d[2])
-                }
-                result.ppg.push(ppg)
-            }
-            if (d.length == 3 && d[0] == "E") {
-                // environment
-                var env = {
-                    ms: parseInt(d[1]),
-                    light: parseInt(d[2])
-                }
-                result.environment.push(env)
-            }
-            if (d.length == 4 && d[0] == "P") {
-                // we have pressure
-                var press = {
-                    ms: parseInt(d[1]),
-                    temp: parseInt(d[2]),
-                    dPress: parseInt(d[3])
-                }
-                result.pressure.push(press)
-            }
-        }
+            /****************************************************
+             * Connect to Bangle
+             ****************************************************/
+            Puck.connect(function (c) {
+                if (!c) return;
+
+                connection = c;
+                pMain.textContent = "Connected!";
+                btnConnect.textContent = "Disconnect";
+
+                // Init result buffer
+                result = {
+                    startTs: new Date(),
+                    accel: [],
+                    heartRate: [],
+                    gps: []
+                };
+
+                buf = "";
+
+                /****************************************************
+                 * Incoming BLE stream
+                 ****************************************************/
+                connection.on("data", function (d) {
+                    buf += d;
+                    let lines = buf.split("\n");
+                    buf = lines.pop();
+                    lines.forEach(onLine);
+                });
+
+                /****************************************************
+                 * Do NOT upload code — instead tell Bangle we're ready
+                 ****************************************************/
+                sendJSON({ cmd: "hello" });
+
+                // Auto-start streaming immediately
+                sendJSON({
+                    cmd: "start",
+                    sensors: ["accel", "hrm"],
+                    interval: 200
+                });
+
+                console.log("Ready.");
+            });
+        });
+
     </script>
 </body>
-
 </html>
