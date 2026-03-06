@@ -61,44 +61,43 @@ connectAccelBtn.addEventListener('click', async () => {
     const device = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: 'Bangle' }],
         optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
-    })
-    const server = await device.gatt.connect()
-    const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8')
-    const characteristic = await service.getCharacteristic('e95dca4b-251d-470a-a062-fa1922dfa9a8')
+    });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8');
+    const char = await service.getCharacteristic('e95dca4b-251d-470a-a062-fa1922dfa9a8');
 
-    characteristic.addEventListener('characteristicvaluechanged', evt => {
-        const data = evt.target.value
-        const x = data.getInt16(0,true)
-        const y = data.getInt16(2,true)
-        const z = data.getInt16(4,true)
-        accText.textContent = `ACC: X=${x}, Y=${y}, Z=${z}`
-        if(testRunning) testData.motion.push({x,y,z,ts:Date.now()})
-    })
+    char.addEventListener('characteristicvaluechanged', evt => {
+        const data = evt.target.value;
+        const x = data.getInt16(0,true);
+        const y = data.getInt16(2,true);
+        const z = data.getInt16(4,true);
+        accText.textContent = `ACC: X=${x}, Y=${y}, Z=${z}`;
+    });
 
-    await characteristic.startNotifications()
-})
+    await char.startNotifications();
+});
 
 // --- Gyroscope ---
 connectGyroBtn.addEventListener('click', async () => {
     const device = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: 'Bangle' }],
-        optionalServices: ['e95d6b53-251d-470a-a062-fa1922dfa9a8']
-    })
-    const server = await device.gatt.connect()
-    const service = await server.getPrimaryService('e95d6b53-251d-470a-a062-fa1922dfa9a8')
-    const characteristic = await service.getCharacteristic('e95dfb24-251d-470a-a062-fa1922dfa9a8')
+        optionalServices: ['e95d6b53-251d-470a-a062-fa1922dfa9a8'] // Gyro service UUID
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService('e95d6b53-251d-470a-a062-fa1922dfa9a8');
+    const characteristic = await service.getCharacteristic('e95dfb24-251d-470a-a062-fa1922dfa9a8'); // Data characteristic
 
     characteristic.addEventListener('characteristicvaluechanged', evt => {
-        const data = evt.target.value
-        const x = data.getInt16(0,true)
-        const y = data.getInt16(2,true)
-        const z = data.getInt16(4,true)
-        gyroText.textContent = `GYRO: X=${x}, Y=${y}, Z=${z}`
-        if(testRunning) testData.gyro.push({x,y,z,ts:Date.now()})
-    })
+        const data = evt.target.value;
+        const x = data.getInt16(0, true);
+        const y = data.getInt16(2, true);
+        const z = data.getInt16(4, true);
+        gyroText.textContent = `GYRO: X=${x}, Y=${y}, Z=${z}`;
+    });
 
-    await characteristic.startNotifications()
-})
+    await characteristic.startNotifications();
+});
 
 let testRunning = false
 mainText.textContent = 'Ready to start'
