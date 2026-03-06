@@ -42,7 +42,21 @@ Bangle.on('accel',function(a) {
     Math.round(a.z * 8192)
     ];
   Bluetooth.println(d.join(","));
-})
+});
+
+// --- GYRO ---
+Bangle.setGyroPower(1);
+Bangle.on('gyro', function(g) {
+  var d = [
+    "Y",
+    Math.round(Date.now() - start),
+    Math.round(g.x * 1000),
+    Math.round(g.y * 1000),
+    Math.round(g.z * 1000)
+  ];
+  Bluetooth.println(d.join(","));
+});
+
 
 // Bangle.setCompassPower(1);
 // Bangle.on('mag', function(mag) {
@@ -165,6 +179,7 @@ Bangle.on('HRM-env', function(env) {
                     result.hr = []
                     result.ppg = []
                     result.environment = []
+                    result.gyro = []
                     // Handle the data we get back, and call 'onLine'
                     // whenever we get a new line
                     var buf = "";
@@ -212,6 +227,16 @@ Bangle.on('HRM-env', function(env) {
 
                 result.accel.push(accel)
             }
+            if (d.length == 5 && d[0] == "Y") {
+                var gyro = {
+                    ms: parseInt(d[1],10),
+                    x: parseInt(d[2],10),
+                    y: parseInt(d[3],10),
+                    z: parseInt(d[4],10)
+                }
+                result.gyro.push(gyro)
+            }
+            
             if (d.length == 5 && d[0] == "C") {
                 // we have compass reading
                 var mag = {
