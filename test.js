@@ -27,6 +27,13 @@ const BANGLE_CODE = `
 var start = Date.now();
 Bluetooth.println("I," + start);
 
+// Keep sensors alive
+Bangle.setOptions({
+  powerSave: false,
+  wakeOnFaceUp: false,
+  lockTimeout: 0
+});
+
 // HRM
 Bangle.setHRMPower(1);
 Bangle.on('HRM', hr => {
@@ -44,13 +51,8 @@ Bangle.setGyroPower(1);
 Bangle.on('gyro', g => {
   Bluetooth.println("G," + (Date.now()-start) + "," + g.x + "," + g.y + "," + g.z);
 });
-
-// Keep IMU alive
-Bangle.setOptions({ 
-  powerSave: false,
-  wakeOnFaceUp: false
-});
 `;
+
 
 // -----------------------------
 // Connect‑knapp
