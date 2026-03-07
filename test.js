@@ -21,13 +21,14 @@ let testData = {
 
 // -----------------------------
 // Kod som laddas upp till Bangle.js
+// (DIN FUNGERANDE VERSION)
 // -----------------------------
 const BANGLE_CODE = `
 var start = Date.now();
 Bluetooth.println("I," + start);
 
-// ACCELEROMETER
-Bangle.on('accel', function(a) {
+// ACCEL
+Bangle.on('accel',function(a) {
   var d = [
     "A",
     Math.round(Date.now() - start),
@@ -38,9 +39,19 @@ Bangle.on('accel', function(a) {
   Bluetooth.println(d.join(","));
 });
 
+// STEPS (vi ignorerar i parsing)
+Bangle.on('step', function(up) {
+  var d = [
+    "S",
+    Math.round(Date.now() - start),
+    up
+  ];
+  Bluetooth.println(d.join(","));
+});
+
 // HRM
 Bangle.setHRMPower(1);
-Bangle.on('HRM', function(hrm) {
+Bangle.on('HRM',function(hrm) {
   var d = [
     "H",
     Math.round(Date.now() - start),
@@ -49,10 +60,30 @@ Bangle.on('HRM', function(hrm) {
   ];
   Bluetooth.println(d.join(","));
 });
+
+// HRM RAW (vi ignorerar i parsing)
+Bangle.on('HRM-raw',function(hrm) {
+  var d = [
+    "G",
+    Math.round(Date.now() - start),
+    hrm.raw
+  ];
+  Bluetooth.println(d.join(","));
+});
+
+// HRM ENV (vi ignorerar i parsing)
+Bangle.on('HRM-env', function(env) { 
+  var d = [
+    "E",
+    Math.round(Date.now() - start),
+    env
+  ];
+  Bluetooth.println(d.join(","));
+});
 `;
 
 // -----------------------------
-// Funktion för att ladda upp kod i små bitar
+// Chunk‑upload funktion
 // -----------------------------
 function uploadCode(code, callback) {
   let lines = code.split("\n");
@@ -142,6 +173,8 @@ function handleLine(line) {
             z: parseFloat(parts[4])
         });
     }
+
+    // Vi ignorerar S, G, E helt
 }
 
 // -----------------------------
