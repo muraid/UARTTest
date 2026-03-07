@@ -1,190 +1,227 @@
-import { HeartRateSensor } from './ble/heartratesensor.js'
-
+// UI elements
 const connectHRBtn = document.getElementById('connectHRBtn')
-const connectAccelBtn = document.getElementById('connectAccelBtn');
-const connectGyroBtn = document.getElementById('connectGyroBtn');
+const connectAccelBtn = document.getElementById('connectAccelBtn')
+const connectGyroBtn = document.getElementById('connectGyroBtn')
 const startButton = document.getElementById('startBtn')
+
 const mainText = document.getElementById('mainText')
 const subText = document.getElementById('subText')
+
 const hrText = document.getElementById('hrText')
-const accText = document.getElementById('accText');
-const gyroText = document.getElementById('gyroText');
+const accText = document.getElementById('accText')
+const gyroText = document.getElementById('gyroText')
+
 const testNameInput = document.getElementById('testNameInput')
 
-let connectedAccel = false
-let connectedGyro = false
-let accelDevice, gyroDevice
+// connection variables
+let connection
+let buffer = ""
+let connected = false
+let testRunning = false
 
-// object containing the data of the test
+// test data
 let testData = {}
-// initialization of an empty test data
-const initData = function () {
+
+function initData(){
     testData = {
         startTs: '',
         endTs: '',
-        motion: [],
-        orientation: [],
         heartRate: [],
+        accel: [],
         gyro: []
     }
 }
 
-const HRsensor = new HeartRateSensor('Polar', (meas) => {
-    console.log(meas)
-    hrText.textContent = "HR: " + meas.heartRate + " bpm"
-    if (testData && testData.startTs) {
-        meas.msFromStart = new Date().getTime() - testData.startTs.getTime()
-    }
-    if (testRunning) {
-        testData.heartRate.push(meas)
-    }
-})
+// CODE THAT RUNS ON THE WATCH
+const BANGLE_CODE = `
+var start = Date.now();
 
-connectHRBtn.addEventListener('click', async () => {
-    if (!HRsensor.isConnected()) {
-        await HRsensor.connect()
-        if (HRsensor.isConnected()) {
-            HRsensor.startNotificationsHeartRateMeasurement()
-            connectHRBtn.textContent = "Disconnect Heart Rate sensor"
-        }
-    } else {
-        // HRsensor.stopNotificationsHeartRateMeasurement()
-        HRsensor.disconnect()
-        if (!HRsensor.isConnected()) {
-            connectHRBtn.textContent = "Connect Heart Rate sensor"
-            hrText.textContent = " "
-        }
-    }
-})
+Bangle.setHRMPower(1);
+Bangle.setGyroPower(1);
 
-connectAccelBtn.addEventListener('click', async () => {
-    const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'Bangle' }],
-        optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
-    });
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8');
-    const char = await service.getCharacteristic('e95dca4b-251d-470a-a062-fa1922dfa9a8');
-
-    char.addEventListener('characteristicvaluechanged', evt => {
-        const data = evt.target.value;
-        const x = data.getInt16(0,true);
-        const y = data.getInt16(2,true);
-        const z = data.getInt16(4,true);
-        accText.textContent = `ACC: X=${x}, Y=${y}, Z=${z}`;
-    });
-
-    await char.startNotifications();
+Bangle.on('accel', function(a){
+ Bluetooth.println("A,"+
+   (Date.now()-start)+","+
+   Math.round(a.x*8192)+","+
+   Math.round(a.y*8192)+","+
+   Math.round(a.z*8192));
 });
 
-// --- Gyroscope ---
-connectGyroBtn.addEventListener('click', async () => {
-    const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'Bangle' }],
-        optionalServices: ['e95d6b53-251d-470a-a062-fa1922dfa9a8'] // Gyro service UUID
-    });
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('e95d6b53-251d-470a-a062-fa1922dfa9a8');
-    const characteristic = await service.getCharacteristic('e95dfb24-251d-470a-a062-fa1922dfa9a8'); // Data characteristic
-
-    characteristic.addEventListener('characteristicvaluechanged', evt => {
-        const data = evt.target.value;
-        const x = data.getInt16(0, true);
-        const y = data.getInt16(2, true);
-        const z = data.getInt16(4, true);
-        gyroText.textContent = `GYRO: X=${x}, Y=${y}, Z=${z}`;
-    });
-
-    await characteristic.startNotifications();
+Bangle.on('gyro', function(g){
+ Bluetooth.println("Y,"+
+   (Date.now()-start)+","+
+   Math.round(g.x*1000)+","+
+   Math.round(g.y*1000)+","+
+   Math.round(g.z*1000));
 });
 
-let testRunning = false
-mainText.textContent = 'Ready to start'
-// Reference for the Wake Lock.
-let wakeLock = null
+Bangle.on('HRM', function(hr){
+ Bluetooth.println("H,"+
+   (Date.now()-start)+","+
+   hr.bpm);
+});
+`
 
-let doTest = async function () {
-    if (!testRunning) {
-        try {
-            
-        } catch (err) {
-            console.error(err)
-            mainText.textContent = 'ERROR'
-            subText.textContent = 'Sensor needs permission, retry'
+// CONNECT WATCH
+function connectWatch(){
+
+    if(connection){
+        connection.close()
+        connection = undefined
+        connected = false
+        mainText.textContent = "Disconnected"
+        return
+    }
+
+    mainText.textContent = "Connecting..."
+
+    Puck.connect(function(c){
+
+        if(!c){
+            mainText.textContent = "Connection failed"
             return
         }
 
-        if ("wakeLock" in navigator) {
-            // request a wake lock
-            try {
-                wakeLock = await navigator.wakeLock.request("screen")
-            } catch (err) {
-                console.error(err)
-            }
-        } else {
-            subText.textContent = "Wake lock is not supported by this browser"
+        connection = c
+        connected = true
+        mainText.textContent = "Connected to Bangle"
+
+        connection.on("data", function(d){
+            buffer += d
+
+            let lines = buffer.split("\n")
+            buffer = lines.pop()
+
+            lines.forEach(parseLine)
+        })
+
+        // reset watch
+        connection.write("reset();\n", function(){
+
+            setTimeout(function(){
+
+                connection.write(
+                    "\x03\x10if(1){"+BANGLE_CODE+"}\n"
+                )
+
+            },1500)
+
+        })
+
+    })
+}
+
+// PARSE SENSOR DATA
+function parseLine(line){
+
+    const d = line.split(",")
+
+    // ACCELEROMETER
+    if(d[0] === "A"){
+
+        const accel = {
+            ms: parseInt(d[1]),
+            x: parseInt(d[2]),
+            y: parseInt(d[3]),
+            z: parseInt(d[4])
         }
 
-        // all permission working, start the test
+        accText.textContent =
+            `ACC: X=${accel.x} Y=${accel.y} Z=${accel.z}`
+
+        if(testRunning){
+            testData.accel.push(accel)
+        }
+    }
+
+    // GYRO
+    if(d[0] === "Y"){
+
+        const gyro = {
+            ms: parseInt(d[1]),
+            x: parseInt(d[2]),
+            y: parseInt(d[3]),
+            z: parseInt(d[4])
+        }
+
+        gyroText.textContent =
+            `GYRO: X=${gyro.x} Y=${gyro.y} Z=${gyro.z}`
+
+        if(testRunning){
+            testData.gyro.push(gyro)
+        }
+    }
+
+    // HEART RATE
+    if(d[0] === "H"){
+
+        const hr = {
+            ms: parseInt(d[1]),
+            bpm: parseInt(d[2])
+        }
+
+        hrText.textContent = "HR: " + hr.bpm + " bpm"
+
+        if(testRunning){
+            testData.heartRate.push(hr)
+        }
+    }
+
+}
+
+// START / STOP TEST
+async function doTest(){
+
+    if(!testRunning){
+
         initData()
+
         testRunning = true
         testData.startTs = new Date()
 
+        mainText.textContent = "Test running"
+        startButton.textContent = "Stop"
 
-        mainText.textContent = 'Test started!'
-        startButton.textContent = 'Stop'
-    } else {
-        // release wake lock
-        if (wakeLock) {
-            wakeLock.release().then(() => {
-                wakeLock = null
-            })
-        }
+    }
+    else{
 
         testRunning = false
-
         testData.endTs = new Date()
-        mainText.textContent = 'Test completed, ready to start again'
-        startButton.textContent = 'Start'
 
-        console.log(testData)
+        mainText.textContent = "Test finished"
+        startButton.textContent = "Start"
 
-        const testName = testNameInput.value
-        let filename = 'test' + testName + '_' + new Date().getTime() + '.txt'
-        const file = new File([JSON.stringify(testData)], filename, {
-            type: 'text/plain',
-        })
+        saveFile()
 
-        let message = {
-            title: 'Test ' + testName + ' results',
-            text: 'This file contains a test done on ' + new Date(),
-            files: [file],
-        }
-
-        if (navigator.canShare(message)) {
-            await navigator.share(message);
-        } else {
-            mainText.textContent = 'Cannot share file'
-        }
     }
+
 }
 
+// SAVE FILE
+function saveFile(){
 
+    const testName = testNameInput.value || "test"
 
-// detect file saving capability
-const testfile = new File(['test'], "testresults.json", {
-    type: "text/json",
-})
-if ((typeof navigator.share !== 'function') || !navigator.canShare({
-    title: "Test results",
-    text: "This file contains a test done on " + new Date(),
-    files: [testfile],
-})) {
-    subText.textContent = 'File saving not supported'
-    startButton.style.visibility = 'hidden'
-    startButton.disabled = true
+    const filename =
+        "test_" + testName + "_" + Date.now() + ".json"
+
+    const blob =
+        new Blob([JSON.stringify(testData)],
+        {type:"application/json"})
+
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+
 }
 
+// BUTTON EVENTS
 
-startButton.addEventListener('click', doTest)
+connectHRBtn.addEventListener("click", connectWatch)
+connectAccelBtn.addEventListener("click", connectWatch)
+connectGyroBtn.addEventListener("click", connectWatch)
+
+startButton.addEventListener("click", doTest)
+
+mainText.textContent = "Ready to connect"
