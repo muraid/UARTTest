@@ -20,14 +20,12 @@ let testData = {
 };
 
 // -----------------------------
-// Kod som laddas upp till Bangle.js
-// (DIN FUNGERANDE VERSION)
+// DIN FUNGERANDE BANGLE‑KOD (OFÖRÄNDRAD)
 // -----------------------------
 const BANGLE_CODE = `
-var start = Date.now();
+var start = Date.now()
 Bluetooth.println("I," + start);
 
-// ACCEL
 Bangle.on('accel',function(a) {
   var d = [
     "A",
@@ -35,50 +33,46 @@ Bangle.on('accel',function(a) {
     Math.round(a.x * 8192),
     Math.round(a.y * 8192),
     Math.round(a.z * 8192)
-  ];
+    ];
   Bluetooth.println(d.join(","));
-});
+})
 
-// STEPS (vi ignorerar i parsing)
 Bangle.on('step', function(up) {
-  var d = [
-    "S",
-    Math.round(Date.now() - start),
-    up
-  ];
-  Bluetooth.println(d.join(","));
+    var d = [
+      "S",
+      Math.round(Date.now() - start),
+      up
+      ];
+    Bluetooth.println(d.join(","));
 });
 
-// HRM
 Bangle.setHRMPower(1);
 Bangle.on('HRM',function(hrm) {
-  var d = [
-    "H",
-    Math.round(Date.now() - start),
-    hrm.bpm,
-    hrm.confidence
-  ];
-  Bluetooth.println(d.join(","));
+    var d = [
+      "H",
+      Math.round(Date.now() - start),
+      hrm.bpm,
+      hrm.confidence
+      ];
+    Bluetooth.println(d.join(","));
 });
 
-// HRM RAW (vi ignorerar i parsing)
 Bangle.on('HRM-raw',function(hrm) {
-  var d = [
-    "G",
-    Math.round(Date.now() - start),
-    hrm.raw
-  ];
-  Bluetooth.println(d.join(","));
+    var d = [
+      "G",
+      Math.round(Date.now() - start),
+      hrm.raw
+      ];
+    Bluetooth.println(d.join(","));
 });
 
-// HRM ENV (vi ignorerar i parsing)
 Bangle.on('HRM-env', function(env) { 
-  var d = [
-    "E",
-    Math.round(Date.now() - start),
-    env
-  ];
-  Bluetooth.println(d.join(","));
+    var d = [
+      "E",
+      Math.round(Date.now() - start),
+      env
+      ];
+    Bluetooth.println(d.join(","));
 });
 `;
 
