@@ -77,8 +77,21 @@ Bangle.on('HRM-env', function(env) {
 });
 `;
 
-
-
+// -----------------------------
+// Funktion för att ladda upp kod i små bitar
+// -----------------------------
+function uploadCode(code, callback) {
+  let lines = code.split("\n");
+  function sendNext() {
+    if (!lines.length) {
+      callback();
+      return;
+    }
+    let line = lines.shift() + "\n";
+    connection.write(line, sendNext);
+  }
+  sendNext();
+}
 
 // -----------------------------
 // Connect‑knapp
@@ -111,11 +124,18 @@ connectBtn.addEventListener("click", () => {
             lines.forEach(handleLine);
         });
 
-        // Reset Bangle and upload code
-        connection.write("reset();\n", () => {
+        // Stop running code, reset, and upload new code
+        connection.write("\x03", () => {
             setTimeout(() => {
-                connection.write("\x03\x10if(1){" + BANGLE_CODE + "}\n");
-            }, 1500);
+                connection.write("reset();\n", () => {
+                    setTimeout(() => {
+                        uploadCode(BANGLE_CODE, () => {
+                            console.log("Code uploaded!");
+                            statusText.textContent = "Code uploaded!";
+                        });
+                    }, 1500);
+                });
+            }, 300);
         });
     });
 });
@@ -170,7 +190,6 @@ startBtn.addEventListener("click", () => {
     }
 
     if (!testRunning) {
-        // Start test
         testRunning = true;
         testData.hr = [];
         testData.accel = [];
@@ -178,13 +197,11 @@ startBtn.addEventListener("click", () => {
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
-        // Stop test
         testRunning = false;
         testData.endTs = Date.now();
         startBtn.textContent = "Start";
         statusText.textContent = "Test finished";
 
-        // Save file
         const filename = `${testNameInput.value || "test"}_${Date.now()}.json`;
         const blob = new Blob([JSON.stringify(testData)], { type: "application/json" });
         saveAs(blob, filename);
