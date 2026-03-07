@@ -27,35 +27,56 @@ const BANGLE_CODE = `
 var start = Date.now();
 Bluetooth.println("I," + start);
 
-// Keep sensors alive
-Bangle.setOptions({
-  powerSave: false,
-  wakeOnFaceUp: false,
-  lockTimeout: 0
+Bangle.on('accel',function(a) {
+  var d = [
+    "A",
+    Math.round(Date.now() - start),
+    Math.round(a.x * 8192),
+    Math.round(a.y * 8192),
+    Math.round(a.z * 8192)
+  ];
+  Bluetooth.println(d.join(","));
 });
 
-// Polling speed
-Bangle.setPollInterval(80);
+Bangle.on('step', function(up) {
+  var d = [
+    "S",
+    Math.round(Date.now() - start),
+    up
+  ];
+  Bluetooth.println(d.join(","));
+});
 
-// Turn on IMU (accel, gyro, mag)
-Bangle.setSensorsPower(1,1,1);
-
-// HRM
 Bangle.setHRMPower(1);
-Bangle.on('HRM', hr => {
-  Bluetooth.println("H," + (Date.now()-start) + "," + hr.bpm + "," + hr.confidence);
+Bangle.on('HRM',function(hrm) {
+  var d = [
+    "H",
+    Math.round(Date.now() - start),
+    hrm.bpm,
+    hrm.confidence
+  ];
+  Bluetooth.println(d.join(","));
 });
 
-// Accelerometer
-Bangle.on('accel', a => {
-  Bluetooth.println("A," + (Date.now()-start) + "," + a.x + "," + a.y + "," + a.z);
+Bangle.on('HRM-raw',function(hrm) {
+  var d = [
+    "G",
+    Math.round(Date.now() - start),
+    hrm.raw
+  ];
+  Bluetooth.println(d.join(","));
 });
 
-// Gyroscope
-Bangle.on('gyro', g => {
-  Bluetooth.println("G," + (Date.now()-start) + "," + g.x + "," + g.y + "," + g.z);
+Bangle.on('HRM-env', function(env) { 
+  var d = [
+    "E",
+    Math.round(Date.now() - start),
+    env
+  ];
+  Bluetooth.println(d.join(","));
 });
 `;
+
 
 
 
