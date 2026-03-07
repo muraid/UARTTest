@@ -5,48 +5,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="https://cdn.rawgit.com/kimeiga/bahunya/css/bahunya-0.1.1.css" />
+    <title>Bangle.js Data Collection</title>
 </head>
 
 <body>
 
-<h2 style="text-align: center;">Data collection web app</h2>
+<h2 style="text-align: center;">Data Collection Web App</h2>
 
 <main>
 <article>
 
-<h3 id="mainText"></h3>
-<p id="subText"></p>
+    <h3 id="statusText">Not connected</h3>
 
-<section>
+    <section style="margin-bottom: 20px;">
+        <button id="connectBtn">Connect Watch</button>
+    </section>
 
-<p id="hrText"></p>
-<button id="connectHRBtn">Connect Watch</button>
+    <section style="margin-bottom: 20px;">
+        <label>
+            Test name:
+            <input type="text" id="testName" placeholder="e.g. test1">
+        </label>
+    </section>
 
-<p id="accText"></p>
-<button id="connectAccelBtn">Connect Accelerometer</button>
-
-<p id="gyroText"></p>
-<button id="connectGyroBtn">Connect Gyroscope</button>
-
-</section>
-
-<section>
-
-<p>
-<label>Test name:
-<input type="text" id="testNameInput" name="testNameInput">
-</label>
-</p>
-
-<button id="startBtn">Start</button>
-
-</section>
+    <section>
+        <button id="startBtn">Start</button>
+    </section>
 
 </article>
 </main>
 
+<!-- Libraries -->
 <script src="https://www.puck-js.com/puck.js"></script>
 <script src="docs/deps/FileSaver.js"></script>
+
+<!-- Your app logic -->
 <script type="module" src="test.js"></script>
 
 </body>
