@@ -39,10 +39,16 @@ Bangle.on('accel', a => {
   Bluetooth.println("A," + (Date.now()-start) + "," + a.x + "," + a.y + "," + a.z);
 });
 
-// Gyro
+// Gyroscope
 Bangle.setGyroPower(1);
 Bangle.on('gyro', g => {
   Bluetooth.println("G," + (Date.now()-start) + "," + g.x + "," + g.y + "," + g.z);
+});
+
+// Keep IMU alive
+Bangle.setOptions({ 
+  powerSave: false,
+  wakeOnFaceUp: false
 });
 `;
 
@@ -138,7 +144,9 @@ startBtn.addEventListener("click", () => {
     if (!testRunning) {
         // Start test
         testRunning = true;
-        testData = { startTs: Date.now(), endTs: null, hr: [], accel: [], gyro: [] };
+        testData.hr = [];
+        testData.accel = [];
+        testData.gyro = [];
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
