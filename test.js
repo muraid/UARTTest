@@ -34,6 +34,12 @@ Bangle.setOptions({
   lockTimeout: 0
 });
 
+// Polling speed
+Bangle.setPollInterval(80);
+
+// Turn on IMU (accel, gyro, mag)
+Bangle.setSensorsPower(1,1,1);
+
 // HRM
 Bangle.setHRMPower(1);
 Bangle.on('HRM', hr => {
@@ -41,17 +47,16 @@ Bangle.on('HRM', hr => {
 });
 
 // Accelerometer
-Bangle.setAccelPower(1);
 Bangle.on('accel', a => {
   Bluetooth.println("A," + (Date.now()-start) + "," + a.x + "," + a.y + "," + a.z);
 });
 
 // Gyroscope
-Bangle.setGyroPower(1);
 Bangle.on('gyro', g => {
   Bluetooth.println("G," + (Date.now()-start) + "," + g.x + "," + g.y + "," + g.z);
 });
 `;
+
 
 
 // -----------------------------
