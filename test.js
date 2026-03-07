@@ -16,20 +16,43 @@ let testData = {
     startTs: null,
     endTs: null,
     hr: [],
-    accel: [],
-    gyro: [],
-    raw: [],
-    env: [],
-    steps: []
+    accel: []
 };
 
 // -----------------------------
 // Kod som laddas upp till Bangle.js
 // -----------------------------
-const BANGLE_CODE = `… (klistra in koden ovan här) …`;
+const BANGLE_CODE = `
+var start = Date.now();
+Bluetooth.println("I," + start);
+
+// ACCELEROMETER
+Bangle.on('accel', function(a) {
+  var d = [
+    "A",
+    Math.round(Date.now() - start),
+    Math.round(a.x * 8192),
+    Math.round(a.y * 8192),
+    Math.round(a.z * 8192)
+  ];
+  Bluetooth.println(d.join(","));
+});
+
+// HRM
+Bangle.setHRMPower(1);
+Bangle.on('HRM', function(hrm) {
+  var d = [
+    "H",
+    Math.round(Date.now() - start),
+    hrm.bpm,
+    hrm.confidence
+  ];
+  Bluetooth.println(d.join(","));
+});
+`;
 
 // -----------------------------
-// Chunk‑upload funktion
+// Funktion för att ladda upp kod i små bitar
 // -----------------------------
 function uploadCode(code, callback) {
   let lines = code.split("\n");
@@ -119,36 +142,6 @@ function handleLine(line) {
             z: parseFloat(parts[4])
         });
     }
-
-    if (type === "G") {
-        testData.gyro.push({
-            ms: parseInt(parts[1]),
-            x: parseFloat(parts[2]),
-            y: parseFloat(parts[3]),
-            z: parseFloat(parts[4])
-        });
-    }
-
-    if (type === "R") {
-        testData.raw.push({
-            ms: parseInt(parts[1]),
-            raw: parseInt(parts[2])
-        });
-    }
-
-    if (type === "E") {
-        testData.env.push({
-            ms: parseInt(parts[1]),
-            env: parseInt(parts[2])
-        });
-    }
-
-    if (type === "S") {
-        testData.steps.push({
-            ms: parseInt(parts[1]),
-            up: parseInt(parts[2])
-        });
-    }
 }
 
 // -----------------------------
@@ -164,10 +157,6 @@ startBtn.addEventListener("click", () => {
         testRunning = true;
         testData.hr = [];
         testData.accel = [];
-        testData.gyro = [];
-        testData.raw = [];
-        testData.env = [];
-        testData.steps = [];
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
