@@ -8,37 +8,45 @@
 </head>
 
 <body>
-    <h2 style="text-align: center;">Data collection web app</h2>
 
-    <main>
-        <article>
-            <h3 id="mainText"></h3>
-            <p id="subText"></p>
+<h2 style="text-align: center;">Data collection web app</h2>
 
-            <section>
-                <p id="hrText"></p>
-                <button id="connectHRBtn">Connect Heart Rate sensor</button>
-                <p id="accText"></p>
-                <button id="connectAccelBtn">Connect Accelerometer</button>
-                <p id="gyroText"></p>
-                <button id="connectGyroBtn">Connect Gyro</button>
-            </section>
+<main>
+<article>
 
-            <section>
-                <p>
-                    <label>Test name:
-                        <input type="text" id="testNameInput" name="testNameInput" value="">
-                    </label>
-                </p>
-                <button id="startBtn">Start</button>
-            </section>
+<h3 id="mainText"></h3>
+<p id="subText"></p>
 
-        </article>
-    </main>
+<section>
 
-    <script type="module" src="ble/bledevice.js"></script>
-    <script type="module" src="ble/heartratesensor.js"></script>
-    <script type="module" src="test.js"></script>
+<p id="hrText"></p>
+<button id="connectHRBtn">Connect Watch</button>
+
+<p id="accText"></p>
+<button id="connectAccelBtn">Connect Accelerometer</button>
+
+<p id="gyroText"></p>
+<button id="connectGyroBtn">Connect Gyroscope</button>
+
+</section>
+
+<section>
+
+<p>
+<label>Test name:
+<input type="text" id="testNameInput" name="testNameInput">
+</label>
+</p>
+
+<button id="startBtn">Start</button>
+
+</section>
+
+</article>
+</main>
+
+<script src="https://www.puck-js.com/puck.js"></script>
+<script src="test.js"></script>
+
 </body>
-
 </html>
