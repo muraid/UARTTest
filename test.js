@@ -17,68 +17,19 @@ let testData = {
     endTs: null,
     hr: [],
     accel: [],
-    gyro: []
+    gyro: [],
+    raw: [],
+    env: [],
+    steps: []
 };
 
 // -----------------------------
 // Kod som laddas upp till Bangle.js
 // -----------------------------
-const BANGLE_CODE = `
-var start = Date.now();
-Bluetooth.println("I," + start);
-
-Bangle.on('accel',function(a) {
-  var d = [
-    "A",
-    Math.round(Date.now() - start),
-    Math.round(a.x * 8192),
-    Math.round(a.y * 8192),
-    Math.round(a.z * 8192)
-  ];
-  Bluetooth.println(d.join(","));
-});
-
-Bangle.on('step', function(up) {
-  var d = [
-    "S",
-    Math.round(Date.now() - start),
-    up
-  ];
-  Bluetooth.println(d.join(","));
-});
-
-Bangle.setHRMPower(1);
-Bangle.on('HRM',function(hrm) {
-  var d = [
-    "H",
-    Math.round(Date.now() - start),
-    hrm.bpm,
-    hrm.confidence
-  ];
-  Bluetooth.println(d.join(","));
-});
-
-Bangle.on('HRM-raw',function(hrm) {
-  var d = [
-    "G",
-    Math.round(Date.now() - start),
-    hrm.raw
-  ];
-  Bluetooth.println(d.join(","));
-});
-
-Bangle.on('HRM-env', function(env) { 
-  var d = [
-    "E",
-    Math.round(Date.now() - start),
-    env
-  ];
-  Bluetooth.println(d.join(","));
-});
-`;
+const BANGLE_CODE = `… (klistra in koden ovan här) …`;
 
 // -----------------------------
-// Funktion för att ladda upp kod i små bitar
+// Chunk‑upload funktion
 // -----------------------------
 function uploadCode(code, callback) {
   let lines = code.split("\n");
@@ -124,13 +75,12 @@ connectBtn.addEventListener("click", () => {
             lines.forEach(handleLine);
         });
 
-        // Stop running code, reset, and upload new code
+        // Stop running code, reset, upload new code
         connection.write("\x03", () => {
             setTimeout(() => {
                 connection.write("reset();\n", () => {
                     setTimeout(() => {
                         uploadCode(BANGLE_CODE, () => {
-                            console.log("Code uploaded!");
                             statusText.textContent = "Code uploaded!";
                         });
                     }, 1500);
@@ -178,6 +128,27 @@ function handleLine(line) {
             z: parseFloat(parts[4])
         });
     }
+
+    if (type === "R") {
+        testData.raw.push({
+            ms: parseInt(parts[1]),
+            raw: parseInt(parts[2])
+        });
+    }
+
+    if (type === "E") {
+        testData.env.push({
+            ms: parseInt(parts[1]),
+            env: parseInt(parts[2])
+        });
+    }
+
+    if (type === "S") {
+        testData.steps.push({
+            ms: parseInt(parts[1]),
+            up: parseInt(parts[2])
+        });
+    }
 }
 
 // -----------------------------
@@ -194,6 +165,9 @@ startBtn.addEventListener("click", () => {
         testData.hr = [];
         testData.accel = [];
         testData.gyro = [];
+        testData.raw = [];
+        testData.env = [];
+        testData.steps = [];
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
