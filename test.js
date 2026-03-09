@@ -106,6 +106,8 @@ connectBtn.addEventListener("click", () => {
         statusText.textContent = "Connected";
         connectBtn.textContent = "Disconnect";
 
+        testRunning = true;
+        
         let buffer = "";
         connection.on("data", d => {
             buffer += d;
@@ -202,14 +204,7 @@ startBtn.addEventListener("click", () => {
         return;
     }
 
-    if (!testRunning) {
-        testRunning = true;
-        testData.hr = [];
-        testData.accel = [];
-        testData.mag = [];
-        startBtn.textContent = "Stop";
-        statusText.textContent = "Recording...";
-    } else {
+    if (testRunning){
         testRunning = false;
         testData.endTs = Date.now();
         startBtn.textContent = "Start";
