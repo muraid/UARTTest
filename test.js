@@ -1,7 +1,8 @@
 // -----------------------------
 // UI‑element
 // -----------------------------
-const connectBtn = document.getElementById("connectBtn");
+const connectHRBtn = document.getElementById("connectHRBtn");
+const connectMAGBtn = document.getElementById("connectMAGBtn");
 const startBtn = document.getElementById("startBtn");
 const statusText = document.getElementById("statusText");
 const testNameInput = document.getElementById("testName");
@@ -16,7 +17,8 @@ let testData = {
     startTs: null,
     endTs: null,
     hr: [],
-    accel: []
+    accel: [],
+    mag: []
 };
 
 // -----------------------------
@@ -74,6 +76,18 @@ Bangle.on('HRM-env', function(env) {
       ];
     Bluetooth.println(d.join(","));
 });
+
+Bangle.setCompassPower(1);
+Bangle.on('mag', function(mag) {
+     var d = [
+      "C",
+      Math.round(Date.now() - start),
+       mag.x,
+       mag.y,
+       mag.z
+       ];
+     Bluetooth.println(d.join(","));
+});
 `;
 
 // -----------------------------
@@ -95,12 +109,12 @@ function uploadCode(code, callback) {
 // -----------------------------
 // Connect‑knapp
 // -----------------------------
-connectBtn.addEventListener("click", () => {
+connectHRBtn.addEventListener("click", () => {
     if (connection) {
         connection.close();
         connection = null;
         statusText.textContent = "Disconnected";
-        connectBtn.textContent = "Connect";
+        connectHRBtn.textContent = "Connect";
         return;
     }
 
@@ -112,7 +126,51 @@ connectBtn.addEventListener("click", () => {
 
         connection = c;
         statusText.textContent = "Connected";
-        connectBtn.textContent = "Disconnect";
+        connectHRBtn.textContent = "Disconnect";
+
+        let buffer = "";
+
+        connection.on("data", d => {
+            buffer += d;
+            let lines = buffer.split("\n");
+            buffer = lines.pop();
+            lines.forEach(handleLine);
+        });
+
+        // Stop running code, reset, upload new code
+        connection.write("\x03", () => {
+            setTimeout(() => {
+                connection.write("reset();\n", () => {
+                    setTimeout(() => {
+                        uploadCode(BANGLE_CODE, () => {
+                            statusText.textContent = "Code uploaded!";
+                        });
+                    }, 1500);
+                });
+            }, 300);
+        });
+    });
+});
+
+
+connectMAGBtn.addEventListener("click", () => {
+    if (connection) {
+        connection.close();
+        connection = null;
+        statusText.textContent = "Disconnected";
+        connectMAGBtn.textContent = "Connect";
+        return;
+    }
+
+    Puck.connect(c => {
+        if (!c) {
+            statusText.textContent = "Failed to connect";
+            return;
+        }
+
+        connection = c;
+        statusText.textContent = "Connected";
+        connectMAGBtn.textContent = "Disconnect";
 
         let buffer = "";
 
@@ -168,6 +226,16 @@ function handleLine(line) {
         });
     }
 
+    if (type === "C") {
+        testData.accel.push({
+            ms: parseInt(parts[1]),
+            x: parseFloat(parts[2]),
+            y: parseFloat(parts[3]),
+            z: parseFloat(parts[4])
+        });
+
+    }
+
     // Vi ignorerar S, G, E helt
 }
 
@@ -184,6 +252,7 @@ startBtn.addEventListener("click", () => {
         testRunning = true;
         testData.hr = [];
         testData.accel = [];
+        testData.mag: [];
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
