@@ -1,38 +1,37 @@
-// -----------------------------
-// UI‑element
-// -----------------------------
-const connectBtn = document.getElementById("connectBtn");
-const startHRBtn = document.getElementById("startHRBtn");
-const startMAGBtn = document.getElementById("startMAGBtn");
-const startACCELBtn = document.getElementById("startACCELBtn");
-const startBtn = document.getElementById("startBtn");
-const statusText = document.getElementById("statusText");
-const testNameInput = document.getElementById("testName");
+document.addEventListener("DOMContentLoaded", () => {
 
-// -----------------------------
-// Variabler
-// -----------------------------
-let connection = null;
-let testRunning = false;
+    // -----------------------------
+    // UI‑element
+    // -----------------------------
+    const connectBtn = document.getElementById("connectBtn");
+    const startHRBtn = document.getElementById("startHRBtn");
+    const startMAGBtn = document.getElementById("startMAGBtn");
+    const startACCELBtn = document.getElementById("startACCELBtn");
+    const startBtn = document.getElementById("startBtn");
+    const statusText = document.getElementById("statusText");
+    const testNameInput = document.getElementById("testName");
 
-let testData = {
-    startTs: null,
-    endTs: null,
-    hr: [],
-    accel: [],
-    mag: []
-};
+    // -----------------------------
+    // Variabler
+    // -----------------------------
+    let connection = null;
+    let testRunning = false;
 
-// -----------------------------
-// BANGLE CODE – ENDA VERSIONEN
-// -----------------------------
-const BANGLE_CODE = `
+    let testData = {
+        startTs: null,
+        endTs: null,
+        hr: [],
+        accel: [],
+        mag: []
+    };
+
+    // -----------------------------
+    // BANGLE CODE
+    // -----------------------------
+    const BANGLE_CODE = `
 var start = Date.now();
 Bluetooth.println("I," + start);
 
-// -----------------------------
-// Sensor‑startfunktioner
-// -----------------------------
 function startACCEL() {
   Bangle.on('accel', a => {
     Bluetooth.println("A," + (Date.now()-start) + "," +
@@ -58,9 +57,6 @@ function startMAG() {
   });
 }
 
-// -----------------------------
-// Lyssna på kommandon från webben
-// -----------------------------
 Bluetooth.on('data', d => {
   d = d.trim();
   if (d === "ACCEL") startACCEL();
@@ -69,149 +65,153 @@ Bluetooth.on('data', d => {
 });
 `;
 
-// -----------------------------
-// Chunk‑upload funktion
-// -----------------------------
-function uploadCode(code, callback) {
-  let lines = code.split("\n");
-  function sendNext() {
-    if (!lines.length) {
-      callback();
-      return;
-    }
-    connection.write(lines.shift() + "\n", sendNext);
-  }
-  sendNext();
-}
-
-// -----------------------------
-// Connect‑knapp
-// -----------------------------
-connectBtn.addEventListener("click", () => {
-    if (connection) {
-        connection.close();
-        connection = null;
-        statusText.textContent = "Disconnected";
-        connectBtn.textContent = "Connect";
-        return;
+    // -----------------------------
+    // Upload helper
+    // -----------------------------
+    function uploadCode(code, callback) {
+        let lines = code.split("\n");
+        function sendNext() {
+            if (!lines.length) {
+                callback();
+                return;
+            }
+            connection.write(lines.shift() + "\n", sendNext);
+        }
+        sendNext();
     }
 
-    Puck.connect(c => {
-        if (!c) {
-            statusText.textContent = "Failed to connect";
+    // -----------------------------
+    // Connect‑knapp
+    // -----------------------------
+    connectBtn.addEventListener("click", () => {
+        if (connection) {
+            connection.close();
+            connection = null;
+            statusText.textContent = "Disconnected";
+            connectBtn.textContent = "Connect watch";
             return;
         }
 
-        connection = c;
-        statusText.textContent = "Connected";
-        connectBtn.textContent = "Disconnect";
+        Puck.connect(c => {
+            if (!c) {
+                statusText.textContent = "Failed to connect";
+                return;
+            }
 
-        testRunning = true;
-        
-        let buffer = "";
-        connection.on("data", d => {
-            buffer += d;
-            let lines = buffer.split("\n");
-            buffer = lines.pop();
-            lines.forEach(handleLine);
-        });
+            connection = c;
+            statusText.textContent = "Connected";
+            connectBtn.textContent = "Disconnect";
 
-        // Stop running code, reset, upload new code
-        connection.write("\x03", () => {
-            setTimeout(() => {
-                connection.write("reset();\n", () => {
-                    setTimeout(() => {
-                        uploadCode(BANGLE_CODE, () => {
-                            statusText.textContent = "Code uploaded!";
-                        });
-                    }, 1500);
-                });
-            }, 300);
+            // ⭐ Starta datainsamling direkt
+            testRunning = true;
+
+            let buffer = "";
+            connection.on("data", d => {
+                buffer += d;
+                let lines = buffer.split("\n");
+                buffer = lines.pop();
+                lines.forEach(handleLine);
+            });
+
+            // Reset + upload code
+            connection.write("\x03", () => {
+                setTimeout(() => {
+                    connection.write("reset();\n", () => {
+                        setTimeout(() => {
+                            uploadCode(BANGLE_CODE, () => {
+                                statusText.textContent = "Code uploaded!";
+                            });
+                        }, 1500);
+                    });
+                }, 300);
+            });
         });
     });
-});
 
-// -----------------------------
-// Sensor‑startknappar
-// -----------------------------
-startHRBtn.addEventListener("click", () => {
-    if (connection) {
-        connection.write("HR\n");
-        statusText.textContent = "HRM started";
-    }
-});
+    // -----------------------------
+    // Sensor‑startknappar
+    // -----------------------------
+    startHRBtn.addEventListener("click", () => {
+        if (connection) {
+            connection.write("HR\n");
+            statusText.textContent = "HRM started";
+        }
+    });
 
-startMAGBtn.addEventListener("click", () => {
-    if (connection) {
-        connection.write("MAG\n");
-        statusText.textContent = "MAG started";
-    }
-});
+    startMAGBtn.addEventListener("click", () => {
+        if (connection) {
+            connection.write("MAG\n");
+            statusText.textContent = "MAG started";
+        }
+    });
 
-startACCELBtn.addEventListener("click", () => {
-    if (connection) {
-        connection.write("ACCEL\n");
-        statusText.textContent = "ACCEL started";
-    }
-});
+    startACCELBtn.addEventListener("click", () => {
+        if (connection) {
+            connection.write("ACCEL\n");
+            statusText.textContent = "ACCEL started";
+        }
+    });
 
-// -----------------------------
-// Hantera inkommande data
-// -----------------------------
-function handleLine(line) {
-    let parts = line.split(",");
-    let type = parts[0];
+    // -----------------------------
+    // Hantera inkommande data
+    // -----------------------------
+    function handleLine(line) {
+        let parts = line.split(",");
+        let type = parts[0];
 
-    if (type === "I") {
-        testData.startTs = parseInt(parts[1]);
-    }
+        if (type === "I") {
+            testData.startTs = parseInt(parts[1]);
+        }
 
-    if (!testRunning) return;
+        if (!testRunning) return;
 
-    if (type === "H") {
-        testData.hr.push({
-            ms: parseInt(parts[1]),
-            bpm: parseInt(parts[2]),
-            conf: parseInt(parts[3])
-        });
-    }
+        if (type === "H") {
+            testData.hr.push({
+                ms: parseInt(parts[1]),
+                bpm: parseInt(parts[2]),
+                conf: parseInt(parts[3])
+            });
+        }
 
-    if (type === "A") {
-        testData.accel.push({
-            ms: parseInt(parts[1]),
-            x: parseFloat(parts[2]),
-            y: parseFloat(parts[3]),
-            z: parseFloat(parts[4])
-        });
-    }
+        if (type === "A") {
+            testData.accel.push({
+                ms: parseInt(parts[1]),
+                x: parseFloat(parts[2]),
+                y: parseFloat(parts[3]),
+                z: parseFloat(parts[4])
+            });
+        }
 
-    if (type === "C") {
-        testData.mag.push({
-            ms: parseInt(parts[1]),
-            x: parseFloat(parts[2]),
-            y: parseFloat(parts[3]),
-            z: parseFloat(parts[4])
-        });
-    }
-}
-
-// -----------------------------
-// Start/Stop‑knapp
-// -----------------------------
-startBtn.addEventListener("click", () => {
-    if (!connection) {
-        statusText.textContent = "Connect to Bangle.js first";
-        return;
+        if (type === "C") {
+            testData.mag.push({
+                ms: parseInt(parts[1]),
+                x: parseFloat(parts[2]),
+                y: parseFloat(parts[3]),
+                z: parseFloat(parts[4])
+            });
+        }
     }
 
-    if (testRunning){
-        testRunning = false;
-        testData.endTs = Date.now();
-        startBtn.textContent = "Start";
-        statusText.textContent = "Test finished";
+    // -----------------------------
+    // Start/Stop‑knapp
+    // -----------------------------
+    startBtn.addEventListener("click", () => {
+        if (!connection) {
+            statusText.textContent = "Connect to Bangle.js first";
+            return;
+        }
 
-        const filename = `${testNameInput.value || "test"}_${Date.now()}.json`;
-        const blob = new Blob([JSON.stringify(testData)], { type: "application/json" });
-        saveAs(blob, filename);
-    }
+        if (testRunning) {
+            // Stop recording
+            testRunning = false;
+            testData.endTs = Date.now();
+            startBtn.textContent = "Start";
+            statusText.textContent = "Test finished";
+
+            const filename = `${testNameInput.value || "test"}_${Date.now()}.json`;
+            const blob = new Blob([JSON.stringify(testData)], { type: "application/json" });
+            saveAs(blob, filename);
+        }
+    });
+
 });
