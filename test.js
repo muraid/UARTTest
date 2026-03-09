@@ -22,71 +22,48 @@ let testData = {
 };
 
 // -----------------------------
-// DIN FUNGERANDE BANGLE‑KOD (OFÖRÄNDRAD)
+// BANGLE CODE – HRM + ACCEL
 // -----------------------------
-const BANGLE_CODE = `
-var start = Date.now()
+const BANGLE_CODE_HR = `
+var start = Date.now();
 Bluetooth.println("I," + start);
 
-Bangle.on('accel',function(a) {
-  var d = [
-    "A",
-    Math.round(Date.now() - start),
-    Math.round(a.x * 8192),
-    Math.round(a.y * 8192),
-    Math.round(a.z * 8192)
-    ];
-  Bluetooth.println(d.join(","));
-})
-
-Bangle.on('step', function(up) {
-    var d = [
-      "S",
-      Math.round(Date.now() - start),
-      up
-      ];
-    Bluetooth.println(d.join(","));
+// ACCEL
+Bangle.on('accel', a => {
+  Bluetooth.println("A," + (Date.now()-start) + "," +
+    Math.round(a.x*8192) + "," +
+    Math.round(a.y*8192) + "," +
+    Math.round(a.z*8192));
 });
 
+// HRM
 Bangle.setHRMPower(1);
-Bangle.on('HRM',function(hrm) {
-    var d = [
-      "H",
-      Math.round(Date.now() - start),
-      hrm.bpm,
-      hrm.confidence
-      ];
-    Bluetooth.println(d.join(","));
+Bangle.on('HRM', hrm => {
+  Bluetooth.println("H," + (Date.now()-start) + "," +
+    hrm.bpm + "," + hrm.confidence);
+});
+`;
+
+// -----------------------------
+// BANGLE CODE – MAG + ACCEL
+// -----------------------------
+const BANGLE_CODE_MAG = `
+var start = Date.now();
+Bluetooth.println("I," + start);
+
+// ACCEL
+Bangle.on('accel', a => {
+  Bluetooth.println("A," + (Date.now()-start) + "," +
+    Math.round(a.x*8192) + "," +
+    Math.round(a.y*8192) + "," +
+    Math.round(a.z*8192));
 });
 
-Bangle.on('HRM-raw',function(hrm) {
-    var d = [
-      "G",
-      Math.round(Date.now() - start),
-      hrm.raw
-      ];
-    Bluetooth.println(d.join(","));
-});
-
-Bangle.on('HRM-env', function(env) { 
-    var d = [
-      "E",
-      Math.round(Date.now() - start),
-      env
-      ];
-    Bluetooth.println(d.join(","));
-});
-
+// MAG
 Bangle.setCompassPower(1);
-Bangle.on('mag', function(mag) {
-     var d = [
-      "C",
-      Math.round(Date.now() - start),
-       mag.x,
-       mag.y,
-       mag.z
-       ];
-     Bluetooth.println(d.join(","));
+Bangle.on('mag', mag => {
+  Bluetooth.println("C," + (Date.now()-start) + "," +
+    mag.x + "," + mag.y + "," + mag.z);
 });
 `;
 
@@ -100,21 +77,20 @@ function uploadCode(code, callback) {
       callback();
       return;
     }
-    let line = lines.shift() + "\n";
-    connection.write(line, sendNext);
+    connection.write(lines.shift() + "\n", sendNext);
   }
   sendNext();
 }
 
 // -----------------------------
-// Connect‑knapp
+// Connect HR‑knapp
 // -----------------------------
 connectHRBtn.addEventListener("click", () => {
     if (connection) {
         connection.close();
         connection = null;
         statusText.textContent = "Disconnected";
-        connectHRBtn.textContent = "Connect";
+        connectHRBtn.textContent = "Connect HR";
         return;
     }
 
@@ -126,10 +102,9 @@ connectHRBtn.addEventListener("click", () => {
 
         connection = c;
         statusText.textContent = "Connected";
-        connectHRBtn.textContent = "Disconnect";
+        connectHRBtn.textContent = "Disconnect HR";
 
         let buffer = "";
-
         connection.on("data", d => {
             buffer += d;
             let lines = buffer.split("\n");
@@ -137,13 +112,12 @@ connectHRBtn.addEventListener("click", () => {
             lines.forEach(handleLine);
         });
 
-        // Stop running code, reset, upload new code
         connection.write("\x03", () => {
             setTimeout(() => {
                 connection.write("reset();\n", () => {
                     setTimeout(() => {
-                        uploadCode(BANGLE_CODE, () => {
-                            statusText.textContent = "Code uploaded!";
+                        uploadCode(BANGLE_CODE_HR, () => {
+                            statusText.textContent = "HRM code uploaded!";
                         });
                     }, 1500);
                 });
@@ -152,13 +126,15 @@ connectHRBtn.addEventListener("click", () => {
     });
 });
 
-
+// -----------------------------
+// Connect MAG‑knapp
+// -----------------------------
 connectMAGBtn.addEventListener("click", () => {
     if (connection) {
         connection.close();
         connection = null;
         statusText.textContent = "Disconnected";
-        connectMAGBtn.textContent = "Connect";
+        connectMAGBtn.textContent = "Connect MAG";
         return;
     }
 
@@ -170,10 +146,9 @@ connectMAGBtn.addEventListener("click", () => {
 
         connection = c;
         statusText.textContent = "Connected";
-        connectMAGBtn.textContent = "Disconnect";
+        connectMAGBtn.textContent = "Disconnect MAG";
 
         let buffer = "";
-
         connection.on("data", d => {
             buffer += d;
             let lines = buffer.split("\n");
@@ -181,13 +156,12 @@ connectMAGBtn.addEventListener("click", () => {
             lines.forEach(handleLine);
         });
 
-        // Stop running code, reset, upload new code
         connection.write("\x03", () => {
             setTimeout(() => {
                 connection.write("reset();\n", () => {
                     setTimeout(() => {
-                        uploadCode(BANGLE_CODE, () => {
-                            statusText.textContent = "Code uploaded!";
+                        uploadCode(BANGLE_CODE_MAG, () => {
+                            statusText.textContent = "MAG code uploaded!";
                         });
                     }, 1500);
                 });
@@ -227,16 +201,13 @@ function handleLine(line) {
     }
 
     if (type === "C") {
-        testData.accel.push({
+        testData.mag.push({
             ms: parseInt(parts[1]),
             x: parseFloat(parts[2]),
             y: parseFloat(parts[3]),
             z: parseFloat(parts[4])
         });
-
     }
-
-    // Vi ignorerar S, G, E helt
 }
 
 // -----------------------------
@@ -252,7 +223,7 @@ startBtn.addEventListener("click", () => {
         testRunning = true;
         testData.hr = [];
         testData.accel = [];
-        testData.mag: [];
+        testData.mag = [];
         startBtn.textContent = "Stop";
         statusText.textContent = "Recording...";
     } else {
