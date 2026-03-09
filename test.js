@@ -1,8 +1,10 @@
 // -----------------------------
 // UI‑element
 // -----------------------------
-const connectHRBtn = document.getElementById("connectHRBtn");
-const connectMAGBtn = document.getElementById("connectMAGBtn");
+const connectBtn = document.getElementById("connectBtn");
+const startHRBtn = document.getElementById("startHRBtn");
+const startMAGBtn = document.getElementById("startMAGBtn");
+const startACCELBtn = document.getElementById("startACCELBtn");
 const startBtn = document.getElementById("startBtn");
 const statusText = document.getElementById("statusText");
 const testNameInput = document.getElementById("testName");
@@ -22,48 +24,48 @@ let testData = {
 };
 
 // -----------------------------
-// BANGLE CODE – HRM + ACCEL
+// BANGLE CODE – ENDA VERSIONEN
 // -----------------------------
-const BANGLE_CODE_HR = `
+const BANGLE_CODE = `
 var start = Date.now();
 Bluetooth.println("I," + start);
 
-// ACCEL
-Bangle.on('accel', a => {
-  Bluetooth.println("A," + (Date.now()-start) + "," +
-    Math.round(a.x*8192) + "," +
-    Math.round(a.y*8192) + "," +
-    Math.round(a.z*8192));
-});
+// -----------------------------
+// Sensor‑startfunktioner
+// -----------------------------
+function startACCEL() {
+  Bangle.on('accel', a => {
+    Bluetooth.println("A," + (Date.now()-start) + "," +
+      Math.round(a.x*8192) + "," +
+      Math.round(a.y*8192) + "," +
+      Math.round(a.z*8192));
+  });
+}
 
-// HRM
-Bangle.setHRMPower(1);
-Bangle.on('HRM', hrm => {
-  Bluetooth.println("H," + (Date.now()-start) + "," +
-    hrm.bpm + "," + hrm.confidence);
-});
-`;
+function startHRM() {
+  Bangle.setHRMPower(1);
+  Bangle.on('HRM', hrm => {
+    Bluetooth.println("H," + (Date.now()-start) + "," +
+      hrm.bpm + "," + hrm.confidence);
+  });
+}
+
+function startMAG() {
+  Bangle.setCompassPower(1);
+  Bangle.on('mag', mag => {
+    Bluetooth.println("C," + (Date.now()-start) + "," +
+      mag.x + "," + mag.y + "," + mag.z);
+  });
+}
 
 // -----------------------------
-// BANGLE CODE – MAG + ACCEL
+// Lyssna på kommandon från webben
 // -----------------------------
-const BANGLE_CODE_MAG = `
-var start = Date.now();
-Bluetooth.println("I," + start);
-
-// ACCEL
-Bangle.on('accel', a => {
-  Bluetooth.println("A," + (Date.now()-start) + "," +
-    Math.round(a.x*8192) + "," +
-    Math.round(a.y*8192) + "," +
-    Math.round(a.z*8192));
-});
-
-// MAG
-Bangle.setCompassPower(1);
-Bangle.on('mag', mag => {
-  Bluetooth.println("C," + (Date.now()-start) + "," +
-    mag.x + "," + mag.y + "," + mag.z);
+Bluetooth.on('data', d => {
+  d = d.trim();
+  if (d === "ACCEL") startACCEL();
+  if (d === "HR") startHRM();
+  if (d === "MAG") startMAG();
 });
 `;
 
@@ -83,14 +85,14 @@ function uploadCode(code, callback) {
 }
 
 // -----------------------------
-// Connect HR‑knapp
+// Connect‑knapp
 // -----------------------------
-connectHRBtn.addEventListener("click", () => {
+connectBtn.addEventListener("click", () => {
     if (connection) {
         connection.close();
         connection = null;
         statusText.textContent = "Disconnected";
-        connectHRBtn.textContent = "Connect HR";
+        connectBtn.textContent = "Connect";
         return;
     }
 
@@ -102,7 +104,7 @@ connectHRBtn.addEventListener("click", () => {
 
         connection = c;
         statusText.textContent = "Connected";
-        connectHRBtn.textContent = "Disconnect HR";
+        connectBtn.textContent = "Disconnect";
 
         let buffer = "";
         connection.on("data", d => {
@@ -112,12 +114,13 @@ connectHRBtn.addEventListener("click", () => {
             lines.forEach(handleLine);
         });
 
+        // Stop running code, reset, upload new code
         connection.write("\x03", () => {
             setTimeout(() => {
                 connection.write("reset();\n", () => {
                     setTimeout(() => {
-                        uploadCode(BANGLE_CODE_HR, () => {
-                            statusText.textContent = "HRM code uploaded!";
+                        uploadCode(BANGLE_CODE, () => {
+                            statusText.textContent = "Code uploaded!";
                         });
                     }, 1500);
                 });
@@ -127,47 +130,27 @@ connectHRBtn.addEventListener("click", () => {
 });
 
 // -----------------------------
-// Connect MAG‑knapp
+// Sensor‑startknappar
 // -----------------------------
-connectMAGBtn.addEventListener("click", () => {
+startHRBtn.addEventListener("click", () => {
     if (connection) {
-        connection.close();
-        connection = null;
-        statusText.textContent = "Disconnected";
-        connectMAGBtn.textContent = "Connect MAG";
-        return;
+        connection.write("HR\n");
+        statusText.textContent = "HRM started";
     }
+});
 
-    Puck.connect(c => {
-        if (!c) {
-            statusText.textContent = "Failed to connect";
-            return;
-        }
+startMAGBtn.addEventListener("click", () => {
+    if (connection) {
+        connection.write("MAG\n");
+        statusText.textContent = "MAG started";
+    }
+});
 
-        connection = c;
-        statusText.textContent = "Connected";
-        connectMAGBtn.textContent = "Disconnect MAG";
-
-        let buffer = "";
-        connection.on("data", d => {
-            buffer += d;
-            let lines = buffer.split("\n");
-            buffer = lines.pop();
-            lines.forEach(handleLine);
-        });
-
-        connection.write("\x03", () => {
-            setTimeout(() => {
-                connection.write("reset();\n", () => {
-                    setTimeout(() => {
-                        uploadCode(BANGLE_CODE_MAG, () => {
-                            statusText.textContent = "MAG code uploaded!";
-                        });
-                    }, 1500);
-                });
-            }, 300);
-        });
-    });
+startACCELBtn.addEventListener("click", () => {
+    if (connection) {
+        connection.write("ACCEL\n");
+        statusText.textContent = "ACCEL started";
+    }
 });
 
 // -----------------------------
